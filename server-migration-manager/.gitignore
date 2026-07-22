@@ -1,0 +1,8 @@
+backups/*.tar.zst
+backups/*.sha256
+backups/*.manifest
+backups/session-*/
+logs/*.log
+logs/.remote_state
+logs/.ssh_password
+*.bak
