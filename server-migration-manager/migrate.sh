@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #===============================================================================
 #
-#   SERVER MIGRATION MANAGER v1.1
-#   JOJO BACKUP — Enterprise VPS Cloning & Migration Tool
+#   JOJO BACKUPER v1.1
+#   by @B_KHANEMAN
+#   Server Migration Manager — Enterprise VPS Cloning & Migration
 #
 #===============================================================================
 

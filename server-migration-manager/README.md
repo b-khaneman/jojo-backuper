@@ -1,68 +1,26 @@
-# SERVER MIGRATION MANAGER v1.1
-## JOJO BACKUP — Enterprise VPS Cloning & Migration
+# **JOJO BACKUPER**
+## Server Migration Manager v1.1
 
-> Full install guide (Persian): see repository root [README.md](../README.md)
+> Full guide: [README.md](../README.md) · Author: **[@B_KHANEMAN](https://github.com/b-khaneman)**
 
-Production Bash tool to clone an Ubuntu VPS (20.04 / 22.04 / 24.04) from an **old** server to a **new** one.
-
-**GitHub:** https://github.com/b-khaneman/jojo-backup
-
----
-
-### Install (on OLD server)
+**GitHub:** https://github.com/b-khaneman/jojo-backuper
 
 ```bash
 cd /opt
-sudo git clone https://github.com/b-khaneman/jojo-backup.git
-cd jojo-backup/server-migration-manager
+sudo git clone https://github.com/b-khaneman/jojo-backuper.git
+cd jojo-backuper/server-migration-manager
 sudo ./install.sh
 sudo ./migrate.sh
 ```
-
-Or: `sudo smm` (symlink created by install).
-
----
 
 ### Fast path
 
 | Step | Menu |
 |------|------|
 | 1. Backup | **3) Create Full Server Backup** |
-| 2. Deploy + install toolkit | **1) Deploy to New Server** |
-| 3. Restore with sudo | **2) Restore Backup (sudo)** |
-| 4. Health check | **12) Post-Migration Health Check** |
-
-```bash
-sudo ./migrate.sh backup
-sudo ./migrate.sh deploy
-sudo ./migrate.sh sudo-restore
-```
-
----
-
-### Menu (v1.1)
-
-```
-─── Quick Migration ───
- 1) Deploy to New Server
- 2) Restore Backup (sudo)
-
-─── Backup & Tools ───
- 3) Create Full Server Backup
- 4) Connect To New Server
- 5) Upload Backup Only
- 6) Verify Backup
- 7) Show Backup Information
- 8) Cleanup Backup Files
- 9) Pre-flight Check
-10) Estimate Backup Size
-11) Full Migration Wizard
-12) Post-Migration Health Check
-13) Generate Migration Report
-14) Schedule Weekly Backup
-15) Test Notifications
-16) Exit
-```
+| 2. Deploy | **1) Deploy to New Server** |
+| 3. Restore | **2) Restore Backup (sudo)** |
+| 4. Check | **12) Post-Migration Health Check** |
 
 ---
 

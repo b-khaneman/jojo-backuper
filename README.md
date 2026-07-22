@@ -1,69 +1,156 @@
-# JOJO BACKUP
-### SERVER MIGRATION MANAGER v1.1
+<div align="center">
 
-ابزار حرفه‌ای **کلون و مهاجرت کامل سرور (VPS)** برای Ubuntu  
-پشتیبانی: **20.04 / 22.04 / 24.04**
+# **JOJO BACKUPER**
+### **Server Migration Manager · v1.1**
 
-با این ابزار می‌توانید از سرور قدیم بکاپ کامل بگیرید، به سرور جدید منتقل کنید و با یک دستور `sudo` ریستور کنید.
+**Enterprise Ubuntu VPS Cloning & Migration Toolkit**
+
+<br/>
+
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%20%7C%2022.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
+[![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white)](https://www.gnu.org/software/bash/)
+[![License](https://img.shields.io/badge/License-MIT-0B3D91?style=for-the-badge)](./LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.1.0-111111?style=for-the-badge)](./server-migration-manager/VERSION)
+
+<br/>
+
+**Author**
+
+### **[@B_KHANEMAN](https://github.com/b-khaneman)**
+
+`GitHub · b-khaneman` &nbsp;·&nbsp; `Telegram / ID · @B_KHANEMAN`
+
+<br/>
+
+> **از سرور قدیم بکاپ کامل بگیر · به سرور جدید بفرست · با یک دستور `sudo` ریستور کن**
+
+<br/>
+
+```text
+┌──────────────────────────────────────────────┐
+│   JOJO BACKUPER  ·  ONE-CLICK VPS MIGRATE   │
+│                                              │
+│   OLD SERVER  ──►  BACKUP  ──►  NEW SERVER   │
+│         tar + zstd   ·   rsync   ·   sudo    │
+└──────────────────────────────────────────────┘
+```
+
+</div>
 
 ---
 
-## فهرست
+<div align="center">
 
-1. [پیش‌نیازها](#پیش‌نیازها)
-2. [نصب روی سرور قدیم](#نصب-روی-سرور-قدیم)
-3. [مراحل مهاجرت (پیشنهادی)](#مراحل-مهاجرت-پیشنهادی)
-4. [توضیح منو](#توضیح-منو)
-5. [دستورات CLI](#دستورات-cli)
-6. [تنظیمات](#تنظیمات-configconf)
-7. [ریستور دستی روی سرور جدید](#ریستور-دستی-روی-سرور-جدید)
-8. [بعد از مهاجرت](#بعد-از-مهاجرت)
-9. [عیب‌یابی](#عیب‌یابی)
-10. [ساختار پروژه](#ساختار-پروژه)
+## **فهرست مطالب**
 
----
+</div>
 
-## پیش‌نیازها
+<br/>
 
-### سرور قدیم (منبع)
-- Ubuntu 20.04 / 22.04 / 24.04
-- دسترسی **root** (`sudo`)
-- فضای دیسک کافی برای بکاپ فشرده
-- امکان اتصال SSH به سرور جدید
-
-### سرور جدید (مقصد)
-- Ubuntu هم‌نسخه یا نزدیک به سرور قدیم (پیشنهادی)
-- دسترسی SSH (ترجیحاً کاربر `root`)
-- فضای دیسک بیشتر یا مساوی سرور قدیم
+| # | بخش | توضیح |
+|--:|:----|:------|
+| **01** | [معرفی](#intro) | JOJO BACKUPER چیست؟ |
+| **02** | [ویژگی‌ها](#features) | قابلیت‌های اصلی |
+| **03** | [پیش‌نیازها](#requirements) | سرور قدیم و جدید |
+| **04** | [نصب سریع](#install) | ۳ دستور تا اجرا |
+| **05** | [مراحل مهاجرت](#migrate) | مسیر پیشنهادی |
+| **06** | [منوی برنامه](#menu) | همه گزینه‌ها |
+| **07** | [دستورات CLI](#cli) | اجرای بدون منو |
+| **08** | [تنظیمات](#config) | `config.conf` |
+| **09** | [ریستور دستی](#manual-restore) | روی سرور جدید |
+| **10** | [بعد از مهاجرت](#after) | چک‌لیست نهایی |
+| **11** | [عیب‌یابی](#troubleshoot) | مشکلات رایج |
+| **12** | [ساختار پروژه](#structure) | فایل‌ها و ماژول‌ها |
+| **13** | [امنیت](#security) | هشدارهای مهم |
+| **14** | [سازنده](#author) | **@B_KHANEMAN** |
 
 ---
 
-## نصب روی سرور قدیم
+<a id="intro"></a>
 
-### روش ۱ — کلون از GitHub (پیشنهادی)
+## **معرفی**
+
+**JOJO BACKUPER** یک ابزار **حرفه‌ای Bash** برای **کلون و مهاجرت کامل VPS** است.
+
+روی **سرور قدیم** اجرا می‌شود، بکاپ فشرده می‌سازد، به **سرور جدید** منتقل می‌کند،
+اسکریپت‌ها را نصب می‌کند و در نهایت با **`sudo`** ریستور را انجام می‌دهد.
+
+| | |
+|:--|:--|
+| **نام پروژه** | **JOJO BACKUPER** |
+| **موتور** | Server Migration Manager **v1.1** |
+| **پلتفرم** | **Ubuntu 20.04 / 22.04 / 24.04** |
+| **سازنده** | **[@B_KHANEMAN](https://github.com/b-khaneman)** |
+
+---
+
+<a id="features"></a>
+
+## **ویژگی‌ها**
+
+| قابلیت | جزئیات |
+|:-------|:-------|
+| **Full Backup** | `/etc` `/home` `/root` `/opt` `/usr` `/var` `/srv` `/boot` |
+| **Compression** | `tar` + **zstd** + progress (`pv`) |
+| **Quick Deploy** | گرفتن مشخصات سرور جدید + آپلود + نصب خودکار |
+| **Sudo Restore** | ریستور امن با دسترسی کامل root |
+| **Databases** | MySQL / MariaDB / PostgreSQL / Redis / MongoDB |
+| **Docker** | Images · Volumes · Networks · Compose |
+| **Security** | SSH keys · fail2ban · AppArmor · sudoers |
+| **Network** | Netplan · iptables · nftables · WireGuard |
+| **Integrity** | **SHA256** checksum قبل از ریستور |
+| **Notify** | Telegram / Webhook (اختیاری) |
+
+---
+
+<a id="requirements"></a>
+
+## **پیش‌نیازها**
+
+### **سرور قدیم (منبع)**
+
+- **Ubuntu** 20.04 / 22.04 / 24.04  
+- دسترسی **root** (`sudo`)  
+- فضای دیسک کافی برای بکاپ فشرده  
+- امکان **SSH** به سرور جدید  
+
+### **سرور جدید (مقصد)**
+
+- Ubuntu هم‌نسخه یا نزدیک (پیشنهادی)  
+- دسترسی **SSH** (ترجیحاً `root`)  
+- فضای دیسک **≥** سرور قدیم  
+
+---
+
+<a id="install"></a>
+
+## **نصب سریع**
+
+<div align="center">
+
+### **۳ دستور · آماده‌ی کار**
+
+</div>
 
 ```bash
-# روی سرور قدیم
 cd /opt
-sudo git clone https://github.com/b-khaneman/jojo-backup.git
-cd jojo-backup/server-migration-manager
-sudo chmod +x install.sh migrate.sh restore-agent.sh
-sudo ./install.sh
+sudo git clone https://github.com/b-khaneman/jojo-backuper.git
+cd jojo-backuper/server-migration-manager
+sudo ./install.sh && sudo ./migrate.sh
 ```
 
-پس از نصب:
+> بعد از نصب می‌توانید با دستور **`sudo smm`** هم وارد منو شوید.
 
-```bash
-sudo ./migrate.sh
-# یا
-sudo smm
-```
+<details>
+<summary><b>روش‌های دیگر نصب</b></summary>
 
-### روش ۲ — دانلود ZIP
+<br/>
 
-1. از صفحه ریپو روی GitHub گزینه **Code → Download ZIP** را بزنید  
-2. فایل را به سرور قدیم منتقل کنید  
-3. از حالت فشرده خارج کنید و مثل بالا `install.sh` را اجرا کنید:
+**دانلود ZIP**
+
+1. از صفحه GitHub گزینه **Code → Download ZIP**  
+2. به سرور قدیم منتقل کنید و از حالت فشرده خارج کنید  
+3. سپس:
 
 ```bash
 cd server-migration-manager
@@ -72,88 +159,51 @@ sudo ./install.sh
 sudo ./migrate.sh
 ```
 
-### روش ۳ — کپی مستقیم
-
-اگر پوشه پروژه را دارید:
-
-```bash
-scp -r "JOJO BACKUP" root@OLD_SERVER_IP:/opt/jojo-backup-src
-ssh root@OLD_SERVER_IP
-cd /opt/jojo-backup-src/server-migration-manager
-sudo ./install.sh
-sudo ./migrate.sh
-```
-
-`install.sh` این‌ها را نصب می‌کند: `zstd`, `rsync`, `pv`, `sshpass`, `curl`, و سایر وابستگی‌ها. همچنین لینک `smm` را در `/usr/local/bin` می‌سازد.
+</details>
 
 ---
 
-## مراحل مهاجرت (پیشنهادی)
+<a id="migrate"></a>
 
-جریان سریع و امن:
+## **مراحل مهاجرت**
+
+<div align="center">
+
+### **مسیر طلایی JOJO BACKUPER**
+
+</div>
 
 | مرحله | کار | گزینه منو |
-|------:|----|----------|
-| ۱ | بکاپ کامل از سرور قدیم | **3) Create Full Server Backup** |
-| ۲ | ارسال بکاپ + نصب ابزار روی سرور جدید | **1) Deploy to New Server** |
-| ۳ | ریستور با sudo روی سرور جدید | **2) Restore Backup (sudo)** |
-| ۴ | بررسی سلامت بعد از مهاجرت | **12) Post-Migration Health Check** |
-
-### جزئیات هر مرحله
-
-#### مرحله ۱ — بکاپ
-روی سرور قدیم:
-
-```bash
-sudo ./migrate.sh
-# گزینه 3 را بزنید
-```
-
-خروجی در مسیر:
+|:----:|:----|:----------|
+| **۱** | ساخت بکاپ کامل از سرور قدیم | **`3` Create Full Server Backup** |
+| **۲** | ارسال بکاپ + نصب ابزار روی سرور جدید | **`1` Deploy to New Server** |
+| **۳** | ریستور با sudo روی سرور جدید | **`2` Restore Backup (sudo)** |
+| **۴** | بررسی سلامت بعد از مهاجرت | **`12` Post-Migration Health Check** |
 
 ```text
-./backups/server-backup-TIMESTAMP.tar.zst
-./backups/server-backup-TIMESTAMP.tar.zst.sha256
-./backups/server-backup-TIMESTAMP.tar.zst.manifest
-```
-
-#### مرحله ۲ — Deploy به سرور جدید
-گزینه **1** را بزنید. از شما می‌پرسد:
-
-- IP / hostname سرور جدید  
-- پورت SSH (پیش‌فرض `22`)  
-- Username (معمولاً `root`)  
-- احراز هویت: کلید خصوصی یا پسورد  
-
-سپس به‌صورت خودکار:
-
-1. همه بکاپ‌ها را با `rsync` آپلود می‌کند  
-2. کل اسکریپت‌های JOJO BACKUP را می‌فرستد  
-3. در مسیر `/opt/jojo-backup` روی سرور جدید با **sudo** نصب می‌کند  
-
-#### مرحله ۳ — Restore با sudo
-گزینه **2** را بزنید:
-
-- هشدار overwrite نشان داده می‌شود  
-- باید دقیقاً `YES` تایپ کنید  
-- ریستور با `sudo` روی سرور جدید اجرا می‌شود  
-- در پایان می‌تواند سرور جدید را ریبوت کند  
-
-#### مرحله ۴ — تأیید
-بعد از بالا آمدن سرور جدید، گزینه **12** یا:
-
-```bash
-sudo ./migrate.sh postcheck
+  [ OLD ] --backup--> [ ARCHIVE.tar.zst ]
+                          |
+                       deploy
+                          |
+                          v
+  [ NEW ] <--sudo restore-- [ /opt/jojo-backup ]
 ```
 
 ---
 
-## توضیح منو
+<a id="menu"></a>
+
+## **منوی برنامه**
 
 ```text
+════════════════════════════════════════
+   JOJO BACKUPER  ·  SMM v1.1
+   by @B_KHANEMAN
+════════════════════════════════════════
+
 ─── Quick Migration ───
- 1) Deploy to New Server     ← مشخصات + آپلود بکاپ + نصب اسکریپت
- 2) Restore Backup (sudo)    ← ریستور امن با sudo
+ 1) Deploy to New Server
+ 2) Restore Backup (sudo)
 
 ─── Backup & Tools ───
  3) Create Full Server Backup
@@ -174,56 +224,45 @@ sudo ./migrate.sh postcheck
 
 ---
 
-## دستورات CLI
+<a id="cli"></a>
+
+## **دستورات CLI**
 
 ```bash
-# بکاپ
-sudo ./migrate.sh backup
-
-# ارسال و نصب روی سرور جدید
-sudo ./migrate.sh deploy
-
-# ریستور با sudo
-sudo ./migrate.sh sudo-restore
-
-# بررسی قبل از کار
-sudo ./migrate.sh preflight
-
-# تخمین حجم
-sudo ./migrate.sh estimate
-
-# ویزارد کامل (همه‌چیز پشت سر هم)
-sudo ./migrate.sh wizard
-
-# بررسی بعد از مهاجرت
-sudo ./migrate.sh postcheck
+sudo ./migrate.sh backup          # بکاپ کامل
+sudo ./migrate.sh deploy          # مشخصات + آپلود + نصب
+sudo ./migrate.sh sudo-restore    # ریستور با sudo
+sudo ./migrate.sh preflight       # چک قبل از کار
+sudo ./migrate.sh estimate        # تخمین حجم
+sudo ./migrate.sh wizard          # ویزارد کامل
+sudo ./migrate.sh postcheck       # بررسی بعد از مهاجرت
 ```
 
 ---
 
-## تنظیمات (`config.conf`)
+<a id="config"></a>
 
-فایل مهم: `server-migration-manager/config.conf`
+## **تنظیمات**
 
-| متغیر | معنی | مثال |
-|--------|------|------|
-| `BACKUP_DIR` | مسیر ذخیره بکاپ | `./backups` |
-| `REMOTE_PATH` | مسیر روی سرور جدید | `/backup` |
-| `KEEP_BACKUPS` | تعداد بکاپ‌های نگه‌داشته‌شده | `3` |
-| `BANDWIDTH_LIMIT_KB` | محدودیت سرعت آپلود | `8192` |
-| `ENCRYPT_BACKUP` | رمزنگاری بکاپ | `yes` / `no` |
-| `ENCRYPT_PASSPHRASE` | پسورد رمزنگاری | `...` |
-| `NOTIFY_ENABLED` | نوتیفیکیشن | `yes` / `no` |
-| `NOTIFY_TELEGRAM_BOT_TOKEN` | توکن ربات تلگرام | |
-| `NOTIFY_TELEGRAM_CHAT_ID` | چت آیدی | |
-| `REBOOT_AFTER_RESTORE` | ریبوت بعد از ریستور | `yes` |
-| `PRESERVE_NEW_SSH_HOST_KEYS` | نگه داشتن SSH host key سرور جدید | `yes` |
+فایل: `server-migration-manager/config.conf`
+
+| متغیر | معنی | نمونه |
+|:------|:-----|:------|
+| **`BACKUP_DIR`** | مسیر بکاپ محلی | `./backups` |
+| **`REMOTE_PATH`** | مسیر روی سرور جدید | `/backup` |
+| **`KEEP_BACKUPS`** | تعداد بکاپ‌های نگه‌داشته | `3` |
+| **`BANDWIDTH_LIMIT_KB`** | محدودیت سرعت آپلود | `8192` |
+| **`ENCRYPT_BACKUP`** | رمزنگاری بکاپ | `yes` / `no` |
+| **`NOTIFY_ENABLED`** | نوتیفیکیشن | `yes` / `no` |
+| **`REBOOT_AFTER_RESTORE`** | ریبوت بعد از ریستور | `yes` |
 
 ---
 
-## ریستور دستی روی سرور جدید
+<a id="manual-restore"></a>
 
-اگر Deploy انجام شده باشد، روی خود سرور جدید هم می‌توانید:
+## **ریستور دستی**
+
+اگر Deploy انجام شده باشد، روی سرور جدید:
 
 ```bash
 sudo /opt/jojo-backup/restore-agent.sh \
@@ -234,80 +273,83 @@ sudo /opt/jojo-backup/restore-agent.sh \
 
 ---
 
-## چه چیزهایی بکاپ می‌شود؟
+<a id="after"></a>
 
-- فایل‌سیستم: `/etc` `/home` `/root` `/opt` `/usr` `/var` `/srv` `/boot`
-- شبکه، فایروال (iptables/nftables)، SSL، WireGuard و تانل‌ها
-- دیتابیس: MySQL/MariaDB، PostgreSQL، Redis، MongoDB
-- Docker: image / volume / network / compose
-- امنیت: SSH keys، fail2ban، AppArmor، sudoers
-- وب: nginx / apache / php
-- میل: postfix / dovecot
+## **بعد از مهاجرت**
 
-**حذف‌شده از بکاپ:** `/proc` `/sys` `/dev` `/run` `/tmp` `/mnt` `/media` و مشابه
+1. **DNS** یا Floating IP را به سرور جدید بدهید  
+2. اگر نام NIC فرق دارد، **`/etc/netplan`** را بررسی کنید  
+3. تانل‌ها: `/root/smm-tunnel-hints/`  
+4. Compose: `/opt/smm-compose/`  
+5. وجود **`/etc/smm-restore-complete`** یعنی ریستور تمام شده  
 
 ---
 
-## بعد از مهاجرت
+<a id="troubleshoot"></a>
 
-1. DNS یا Floating IP را به سرور جدید بدهید  
-2. اگر نام کارت شبکه فرق دارد، `/etc/netplan` را بررسی کنید  
-3. تانل‌های GRE/VXLAN را در `/root/smm-tunnel-hints/` چک کنید  
-4. فایل‌های compose در `/opt/smm-compose/` قرار می‌گیرند  
-5. وجود فایل `/etc/smm-restore-complete` یعنی ریستور تمام شده  
-
----
-
-## عیب‌یابی
+## **عیب‌یابی**
 
 | مشکل | راه‌حل |
-|------|--------|
-| خطای permission | همه دستورات را با `sudo` اجرا کنید |
-| SSH وصل نمی‌شود | پورت، فایروال، و کلید/پسورد را چک کنید |
-| آپلود قطع شد | دوباره گزینه **1 (Deploy)** را بزنید — `rsync` ادامه می‌دهد |
-| کمبود فضا | گزینه **10 (Estimate)** و پاکسازی دیسک |
-| ریستور fail شد | لاگ: `/var/log/server-migration/restore.log` روی سرور جدید |
-| بعد از ریبوت SSH نمی‌آید | کنسول VPS را چک کنید؛ netplan/NIC را اصلاح کنید |
-
-لاگ‌های محلی:
-
-```text
-./logs/
-/var/log/server-migration/
-```
+|:-----|:------|
+| **Permission denied** | همه دستورات را با **`sudo`** اجرا کنید |
+| **SSH fail** | پورت، فایروال، کلید/پسورد را چک کنید |
+| **آپلود قطع شد** | دوباره گزینه **`1` Deploy** — rsync ادامه می‌دهد |
+| **کمبود فضا** | گزینه **`10` Estimate** + پاکسازی دیسک |
+| **ریستور fail** | لاگ: `/var/log/server-migration/restore.log` |
 
 ---
 
-## ساختار پروژه
+<a id="structure"></a>
+
+## **ساختار پروژه**
 
 ```text
-JOJO BACKUP/
+jojo-backuper/
+├── README.md                          ← شما اینجا هستید
+├── INSTALL.md
+├── LICENSE
 └── server-migration-manager/
-    ├── migrate.sh              # منوی اصلی (روی سرور قدیم)
-    ├── restore-agent.sh        # عامل ریستور (روی سرور جدید)
-    ├── install.sh              # نصب وابستگی‌ها
+    ├── migrate.sh                     ← منوی اصلی
+    ├── restore-agent.sh               ← عامل ریستور
+    ├── install.sh                     ← نصب وابستگی‌ها
     ├── config.conf
-    ├── modules/                # backup, restore, network, ...
+    ├── modules/                       ← backup · restore · docker · …
     ├── backups/
     └── logs/
 ```
 
 ---
 
-## هشدار امنیتی
+<a id="security"></a>
 
-- ریستور فایل‌سیستم سرور جدید را **بازنویسی** می‌کند  
-- قبل از ریستور حتماً از سرور جدید snapshot بگیرید (اگر ارائه‌دهنده دارد)  
-- پسوردها و کلیدها را در چت عمومی نفرستید  
-- بکاپ شامل secretها (کلید SSL، `.env`، shadow و ...) است — امن نگه دارید  
+## **امنیت**
 
----
+> **هشدار:** ریستور، فایل‌سیستم سرور جدید را بازنویسی می‌کند.
 
-## لایسنس
-
-استفاده آزاد برای مهاجرت سرورهای خودتان. قبل از محیط production روی یک VPS تست امتحان کنید.
+- قبل از ریستور از سرور جدید **Snapshot** بگیرید  
+- بکاپ شامل **secret**هاست — امن نگه دارید  
+- پسورد و کلید را در چت عمومی نفرستید  
 
 ---
 
-**JOJO BACKUP** · ساخته‌شده برای مهاجرت سریع، امن و قابل اعتماد سرور  
-GitHub: https://github.com/b-khaneman/jojo-backup
+<a id="author"></a>
+
+<div align="center">
+
+## **سازنده**
+
+# **[@B_KHANEMAN](https://github.com/b-khaneman)**
+
+**JOJO BACKUPER** ساخته شده توسط **@B_KHANEMAN**  
+برای مهاجرت **سریع · امن · حرفه‌ای** سرورهای Ubuntu
+
+<br/>
+
+[![GitHub](https://img.shields.io/badge/GitHub-b--khaneman-181717?style=for-the-badge&logo=github)](https://github.com/b-khaneman)
+[![Repo](https://img.shields.io/badge/Repo-jojo--backuper-0B3D91?style=for-the-badge&logo=github)](https://github.com/b-khaneman/jojo-backuper)
+
+<br/>
+
+**© 2026 JOJO BACKUPER · MIT License · @B_KHANEMAN**
+
+</div>

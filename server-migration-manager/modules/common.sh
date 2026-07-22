@@ -394,8 +394,8 @@ print_banner() {
     clear
     echo -e "${C_CYAN}${C_BOLD}"
     echo "========================================="
-    echo "  SERVER MIGRATION MANAGER v${SMM_VERSION:-1.1}"
-    echo "  JOJO BACKUP"
+    echo "  JOJO BACKUPER  ·  SMM v${SMM_VERSION:-1.1}"
+    echo "  by @B_KHANEMAN"
     echo "========================================="
     echo -e "${C_RESET}"
 }
