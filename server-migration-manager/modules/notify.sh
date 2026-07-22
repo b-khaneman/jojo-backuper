@@ -18,14 +18,14 @@ notify_send() {
         curl -sS -X POST \
             "https://api.telegram.org/bot${NOTIFY_TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${NOTIFY_TELEGRAM_CHAT_ID}" \
-            --data-urlencode "text=$(echo -e "[JOJO BACKUP / SMM] ${title}\nHost: ${host}\n${body}")" \
+            --data-urlencode "text=$(echo -e "[JOJO BACKUPER] ${title}\nHost: ${host}\n${body}\n@B_KHANEMAN")" \
             >/dev/null 2>&1 || msg_dim "Telegram notify failed"
     fi
 
     # Generic / Discord / Slack webhook
     if [[ -n "${NOTIFY_WEBHOOK_URL:-}" ]]; then
         local payload
-        payload="$(printf '{"content":"[JOJO BACKUP] %s — %s\n%s","text":"[JOJO BACKUP] %s — %s\n%s"}' \
+        payload="$(printf '{"content":"[JOJO BACKUPER] %s — %s\n%s","text":"[JOJO BACKUPER] %s — %s\n%s"}' \
             "$title" "$host" "$body" "$title" "$host" "$body")"
         curl -sS -X POST -H 'Content-Type: application/json' \
             -d "$payload" "$NOTIFY_WEBHOOK_URL" >/dev/null 2>&1 || msg_dim "Webhook notify failed"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 # MODULE: Restore Engine (local + remote orchestration)
-# SERVER MIGRATION MANAGER v1.0 | JOJO BACKUP
+# JOJO BACKUPER v1.1.1 | @B_KHANEMAN
 #===============================================================================
 
 #-------------------------------------------------------------------------------
@@ -82,7 +82,8 @@ connect_new_server() {
         local remote_info
         remote_info="$(ssh_cmd "grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\\\"'; || echo unknown")"
         msg_info "Remote OS: $remote_info"
-        ssh_cmd "mkdir -p '$REMOTE_PATH' && df -h '$REMOTE_PATH' | tail -1" || true
+        ssh_cmd "mkdir -p '$REMOTE_PATH'" 2>/dev/null || \
+            remote_sudo "mkdir -p '$REMOTE_PATH'" 2>/dev/null || true
         # Save connection into config for convenience (without password)
         _persist_remote_config
         msg_ok "Connected and ready"
@@ -206,13 +207,17 @@ deploy_to_new_server() {
     echo
     msg_info "This will:"
     msg_dim "  1) Ask for new server connection details"
-    msg_dim "  2) Upload all local backups + JOJO BACKUP scripts"
+    msg_dim "  2) Upload all local backups + JOJO BACKUPER scripts"
     msg_dim "  3) Install dependencies on the new server (sudo)"
     msg_dim "  4) NOT restore yet — use option 2 after this"
     echo
 
     local backups=()
-    mapfile -t backups < <(ls -1t "${BACKUP_DIR}"/server-backup-*.tar.zst 2>/dev/null)
+    mapfile -t backups < <(ls -1t "${BACKUP_DIR}"/server-backup-*.tar.zst \
+        "${BACKUP_DIR}"/server-backup-*.tar.zst.gpg \
+        "${BACKUP_DIR}"/server-backup-*.tar.zst.enc 2>/dev/null | awk 'NF')
+    # de-dup and prefer newest by mtime — ls -1t already across globs is unsorted between globs
+    mapfile -t backups < <(ls -1t "${BACKUP_DIR}"/server-backup-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' || true)
     if (( ${#backups[@]} == 0 )); then
         msg_error "No backup found in ${BACKUP_DIR}"
         msg_info "Create a backup first (menu option 3)"
@@ -259,7 +264,7 @@ deploy_to_new_server() {
     fi
     msg_ok "Backups uploaded"
 
-    msg_step "Uploading JOJO BACKUP scripts (full toolkit)..."
+    msg_step "Uploading JOJO BACKUPER scripts (full toolkit)..."
     local toolkit_tar="/tmp/jojo-backup-toolkit-$$.tar.zst"
     tar -C "$SCRIPT_DIR" -cf - \
         migrate.sh restore-agent.sh install.sh config.conf VERSION README.md \
@@ -287,7 +292,7 @@ cp -a /opt/jojo-backup/migrate.sh '${REMOTE_PATH}/migrate.sh' || true
 ln -sfn /opt/jojo-backup '${REMOTE_PATH}/smm'
 cd /opt/jojo-backup
 bash ./install.sh
-ls -1t '${REMOTE_PATH}'/server-backup-*.tar.zst | head -1 > /opt/jojo-backup/.latest_backup
+ls -1t '${REMOTE_PATH}'/server-backup-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' | head -1 > /opt/jojo-backup/.latest_backup
 echo DEPLOY_OK
 EOF
 )
@@ -340,7 +345,7 @@ sudo_restore_on_new_server() {
     fi
 
     local archive_path
-    archive_path="$(ssh_cmd "cat /opt/jojo-backup/.latest_backup 2>/dev/null || ls -1t '${REMOTE_PATH}'/server-backup-*.tar.zst 2>/dev/null | head -1" | tr -d '\r' | tail -1)"
+    archive_path="$(ssh_cmd "cat /opt/jojo-backup/.latest_backup 2>/dev/null || ls -1t '${REMOTE_PATH}'/server-backup-* 2>/dev/null | grep -E '\\.tar\\.zst(\\.gpg|\\.enc)?\$' | head -1" | tr -d '\r' | tail -1)"
     [[ -n "$archive_path" ]] || die "No backup on new server. Run option 1 (Deploy) first."
 
     local agent="/opt/jojo-backup/restore-agent.sh"
@@ -431,8 +436,11 @@ upload_backup() {
     fi
 
     local archive="${1:-}"
+    archive="$(ls -1t "${BACKUP_DIR}"/server-backup-*.tar.zst \
+        "${BACKUP_DIR}"/server-backup-*.tar.zst.gpg \
+        "${BACKUP_DIR}"/server-backup-*.tar.zst.enc 2>/dev/null | head -1)"
     if [[ -z "$archive" ]]; then
-        archive="$(ls -1t "${BACKUP_DIR}"/server-backup-*.tar.zst 2>/dev/null | head -1)"
+        archive="$(ls -1t "${BACKUP_DIR}"/server-backup-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' | head -1)"
     fi
     if [[ -z "$archive" || ! -f "$archive" ]]; then
         die "No backup found to upload. Create a backup first."
@@ -522,10 +530,9 @@ restore_server_remote() {
     fi
 
     local archive_name
-    archive_name="$(ls -1t "${BACKUP_DIR}"/server-backup-*.tar.zst 2>/dev/null | head -1 | xargs -r basename)"
+    archive_name="$(ls -1t "${BACKUP_DIR}"/server-backup-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' | head -1 | xargs -r basename)"
     if [[ -z "$archive_name" ]]; then
-        # Try discover on remote
-        archive_name="$(ssh_cmd "ls -1t '${REMOTE_PATH}'/server-backup-*.tar.zst 2>/dev/null | head -1 | xargs -r basename")"
+        archive_name="$(ssh_cmd "ls -1t '${REMOTE_PATH}'/server-backup-* 2>/dev/null | grep -E '\\.tar\\.zst(\\.gpg|\\.enc)?\$' | head -1 | xargs -r basename")"
     fi
     [[ -z "$archive_name" ]] && die "No backup archive found locally or on remote"
 
@@ -549,25 +556,43 @@ restore_server_remote() {
     log_info "Remote restore start on $REMOTE_HOST archive=$archive_name"
 
     # Ensure agent + modules exist remotely
-    if ! ssh_cmd "test -f '${REMOTE_PATH}/restore-agent.sh' || test -f '${REMOTE_PATH}/smm/restore-agent.sh'"; then
+    local agent_path="/opt/jojo-backup/restore-agent.sh"
+    if ssh_cmd "test -f '$agent_path' || test -f '${REMOTE_PATH}/smm/restore-agent.sh' || test -f '${REMOTE_PATH}/restore-agent.sh'"; then
+        :
+    else
         msg_info "Restore agent missing on remote — uploading first..."
         upload_backup || return 1
     fi
 
-    local agent_path="${REMOTE_PATH}/smm/restore-agent.sh"
-    ssh_cmd "test -f '$agent_path'" 2>/dev/null || agent_path="${REMOTE_PATH}/restore-agent.sh"
+    agent_path="/opt/jojo-backup/restore-agent.sh"
+    if ! ssh_cmd "test -f '$agent_path'" 2>/dev/null; then
+        agent_path="${REMOTE_PATH}/smm/restore-agent.sh"
+    fi
+    if ! ssh_cmd "test -f '$agent_path'" 2>/dev/null; then
+        agent_path="${REMOTE_PATH}/restore-agent.sh"
+    fi
 
-    msg_info "Running restore-agent (this may take a long time)..."
-    # Run remotely with nohup log, but also stream output
-    if ssh_cmd "bash '$agent_path' --archive '${REMOTE_PATH}/${archive_name}' --yes --reboot=${REBOOT_AFTER_RESTORE:-yes}"; then
+    msg_info "Running restore-agent with sudo (this may take a long time)..."
+    local restore_script
+    restore_script=$(cat <<EOF
+set -e
+chmod +x '$agent_path'
+bash '$agent_path' --archive '${REMOTE_PATH}/${archive_name}' --yes --reboot=${REBOOT_AFTER_RESTORE:-yes}
+EOF
+)
+    if remote_sudo_script "$restore_script"; then
         msg_ok "Remote restore finished"
         log_ok "Remote restore completed on $REMOTE_HOST"
         declare -f notify_restore_done &>/dev/null && notify_restore_done || true
     else
-        msg_error "Remote restore reported failure — check /var/log/server-migration/restore.log on new server"
-        log_error "Remote restore failed"
-        declare -f notify_restore_fail &>/dev/null && notify_restore_fail "remote agent failed" || true
-        return 1
+        if [[ "${REBOOT_AFTER_RESTORE:-yes}" == "yes" ]]; then
+            msg_warn "SSH ended during restore/reboot — waiting for host..."
+        else
+            msg_error "Remote restore reported failure — check /var/log/server-migration/restore.log on new server"
+            log_error "Remote restore failed"
+            declare -f notify_restore_fail &>/dev/null && notify_restore_fail "remote agent failed" || true
+            return 1
+        fi
     fi
 
     # Post-restore verification
@@ -651,10 +676,18 @@ restore_from_archive() {
         verify_checksum "$archive" || die "Checksum validation failed — aborting restore"
     fi
 
-    # Decrypt if encrypted
+    # Decrypt if encrypted (sets DECRYPTED_BACKUP_FILE — never capture msg stdout)
     local work_archive="$archive"
-    if [[ -f "${archive}.manifest" ]] && grep -q 'encrypted=yes' "${archive}.manifest" 2>/dev/null; then
-        work_archive="$(decrypt_backup_file "$archive" "/tmp/smm-decrypted-$$.tar.zst")"
+    if declare -f is_encrypted_backup &>/dev/null && is_encrypted_backup "$archive"; then
+        DECRYPTED_BACKUP_FILE=""
+        decrypt_backup_file "$archive" "/tmp/smm-decrypted-$$.tar.zst" || die "Decrypt failed"
+        [[ -n "${DECRYPTED_BACKUP_FILE:-}" && -f "$DECRYPTED_BACKUP_FILE" ]] || die "Decrypt produced no file"
+        work_archive="$DECRYPTED_BACKUP_FILE"
+    elif [[ -f "${archive}.manifest" ]] && grep -q 'encrypted=yes' "${archive}.manifest" 2>/dev/null; then
+        DECRYPTED_BACKUP_FILE=""
+        decrypt_backup_file "$archive" "/tmp/smm-decrypted-$$.tar.zst" || die "Decrypt failed"
+        work_archive="${DECRYPTED_BACKUP_FILE:-}"
+        [[ -f "$work_archive" ]] || die "Decrypt produced no file"
     fi
 
     check_dependencies

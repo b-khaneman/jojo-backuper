@@ -10,7 +10,7 @@
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%20%7C%2022.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![License](https://img.shields.io/badge/License-MIT-0B3D91?style=for-the-badge)](./LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.1.0-111111?style=for-the-badge)](./server-migration-manager/VERSION)
+[![Version](https://img.shields.io/badge/Version-1.1.1-111111?style=for-the-badge)](./server-migration-manager/VERSION)
 
 <br/>
 
@@ -349,6 +349,10 @@ jojo-backuper/
 [![Repo](https://img.shields.io/badge/Repo-jojo--backuper-0B3D91?style=for-the-badge&logo=github)](https://github.com/b-khaneman/jojo-backuper)
 
 <br/>
+
+### **Version**
+
+**JOJO BACKUPER v1.1.1** · by **[@B_KHANEMAN](https://github.com/b-khaneman)**
 
 **© 2026 JOJO BACKUPER · MIT License · @B_KHANEMAN**
 

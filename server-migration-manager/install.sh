@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
-# install.sh — Install dependencies for JOJO BACKUP / SMM v1.1
-# Run on Ubuntu 20.04 / 22.04 / 24.04 as root
+# install.sh — Install dependencies for JOJO BACKUPER v1.1.1
+# by @B_KHANEMAN — Ubuntu 20.04 / 22.04 / 24.04
 #===============================================================================
 
 set -euo pipefail
@@ -37,10 +37,10 @@ find "${SCRIPT_DIR}/modules" -type f -name '*.sh' -exec chmod +x {} \; 2>/dev/nu
 mkdir -p /var/log/server-migration
 mkdir -p "${SCRIPT_DIR}/backups" "${SCRIPT_DIR}/logs"
 
-# Symlink (update if exists)
 ln -sfn "${SCRIPT_DIR}/migrate.sh" /usr/local/bin/smm
 echo "[OK] Symlink: smm → ${SCRIPT_DIR}/migrate.sh"
 echo
-echo "[OK] JOJO BACKUP dependencies installed."
+echo "[OK] JOJO BACKUPER dependencies installed."
+echo "     Author: @B_KHANEMAN"
 echo "     Start with: sudo ./migrate.sh"
 echo "            or: sudo smm"

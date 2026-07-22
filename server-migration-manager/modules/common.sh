@@ -429,7 +429,7 @@ print_menu() {
         echo -e "  Remote: ${C_YELLOW}(not configured)${C_RESET}"
     fi
     local latest
-    latest="$(ls -1t "${BACKUP_DIR}"/server-backup-*.tar.zst 2>/dev/null | head -1)"
+    latest="$(ls -1t "${BACKUP_DIR}"/server-backup-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' | head -1)"
     if [[ -n "$latest" ]]; then
         echo -e "  Latest: ${C_CYAN}$(basename "$latest")${C_RESET}"
     fi

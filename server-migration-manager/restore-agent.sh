@@ -79,8 +79,8 @@ source "${MODULES_DIR}/backup.sh"
 source "${MODULES_DIR}/restore.sh"
 
 if [[ -z "$ARCHIVE" ]]; then
-    for candidate in /backup /root /var/backups "$AGENT_DIR"; do
-        ARCHIVE="$(ls -1t "${candidate}"/server-backup-*.tar.zst 2>/dev/null | head -1)"
+    for candidate in /backup /root /var/backups "$AGENT_DIR" /opt/jojo-backup; do
+        ARCHIVE="$(ls -1t "${candidate}"/server-backup-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' | head -1)"
         [[ -n "$ARCHIVE" ]] && break
     done
 fi

@@ -232,32 +232,48 @@ create_full_backup() {
         die "Archive was not created or is empty: $archive"
     fi
 
-    # 4. Checksum
+    # 4. Checksum (plaintext)
     create_checksum "$archive"
     show_progress 92
 
     # 5. Optional encryption + split
-    declare -f encrypt_backup_file &>/dev/null && encrypt_backup_file "$archive"
+    ENCRYPTED_BACKUP_FILE=""
+    if declare -f encrypt_backup_file &>/dev/null; then
+        if encrypt_backup_file "$archive"; then
+            if [[ -n "${ENCRYPTED_BACKUP_FILE:-}" && -f "${ENCRYPTED_BACKUP_FILE}" ]]; then
+                archive="$ENCRYPTED_BACKUP_FILE"
+            fi
+        else
+            msg_error "Encryption failed — plaintext archive kept"
+            log_error "Encryption failed for backup"
+        fi
+    fi
     declare -f split_backup_if_needed &>/dev/null && split_backup_if_needed "$archive"
     show_progress 96
 
-    # 6. Manifest
+    # 6. Manifest (for final artifact — encrypted or plain)
     local size bytes
     bytes="$(stat -c%s "$archive" 2>/dev/null || stat -f%z "$archive")"
     size="$(human_size "$bytes")"
-    {
-        echo "archive=$(basename "$archive")"
-        echo "path=$archive"
-        echo "size_bytes=$bytes"
-        echo "size_human=$size"
-        echo "created=$(date -Iseconds)"
-        echo "hostname=$(hostname)"
-        echo "checksum=$(awk '{print $1}' "${archive}.sha256" 2>/dev/null)"
-        echo "compression=zstd"
-        echo "session=$session_dir"
-        echo "smm_version=${SMM_VERSION:-1.1.0}"
-        echo "encrypted=${ENCRYPT_BACKUP:-no}"
-    } > "${archive}.manifest"
+    if [[ ! -f "${archive}.manifest" ]]; then
+        {
+            echo "archive=$(basename "$archive")"
+            echo "path=$archive"
+            echo "size_bytes=$bytes"
+            echo "size_human=$size"
+            echo "created=$(date -Iseconds)"
+            echo "hostname=$(hostname)"
+            echo "checksum=$(awk '{print $1}' "${archive}.sha256" 2>/dev/null)"
+            echo "compression=zstd"
+            echo "session=$session_dir"
+            echo "smm_version=${SMM_VERSION:-1.1.1}"
+            echo "encrypted=${ENCRYPT_BACKUP:-no}"
+        } > "${archive}.manifest"
+    else
+        # Refresh size fields on existing encrypt manifest
+        echo "size_bytes=$bytes" >> "${archive}.manifest"
+        echo "size_human=$size" >> "${archive}.manifest"
+    fi
 
     cp -a "${archive}.manifest" "$session_dir/" 2>/dev/null || true
 
@@ -284,7 +300,9 @@ create_full_backup() {
 enforce_backup_retention() {
     local keep="${KEEP_BACKUPS:-3}"
     local files
-    mapfile -t files < <(ls -1t "${BACKUP_DIR}"/server-backup-*.tar.zst 2>/dev/null)
+    mapfile -t files < <(ls -1t "${BACKUP_DIR}"/server-backup-*.tar.zst \
+        "${BACKUP_DIR}"/server-backup-*.tar.zst.gpg \
+        "${BACKUP_DIR}"/server-backup-*.tar.zst.enc 2>/dev/null)
     local count=${#files[@]}
     if (( count > keep )); then
         msg_info "Retention: keeping $keep backups (found $count)"
@@ -292,7 +310,8 @@ enforce_backup_retention() {
         for (( i=keep; i<count; i++ )); do
             local f="${files[$i]}"
             msg_dim "Removing old backup: $(basename "$f")"
-            rm -f "$f" "${f}.sha256" "${f}.manifest"
+            rm -f "$f" "${f}.sha256" "${f}.manifest" "${f}.parts.list"
+            rm -f "${f}.part."* 2>/dev/null || true
             log_info "Removed old backup: $f"
         done
     fi
@@ -306,7 +325,7 @@ verify_backup() {
     local archive="${1:-}"
 
     if [[ -z "$archive" ]]; then
-        archive="$(ls -1t "${BACKUP_DIR}"/server-backup-*.tar.zst 2>/dev/null | head -1)"
+        archive="$(ls -1t "${BACKUP_DIR}"/server-backup-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' | head -1)"
     fi
 
     if [[ -z "$archive" || ! -f "$archive" ]]; then
@@ -325,6 +344,11 @@ verify_backup() {
     fi
 
     # Encrypted archives are not valid zstd until decrypted
+    if declare -f is_encrypted_backup &>/dev/null && is_encrypted_backup "$archive"; then
+        msg_ok "Archive is encrypted — SHA256 verified; skip zstd content test"
+        log_ok "Verified encrypted backup: $archive"
+        return 0
+    fi
     if [[ -f "${archive}.manifest" ]] && grep -q 'encrypted=yes' "${archive}.manifest" 2>/dev/null; then
         msg_ok "Archive is encrypted — SHA256 verified; skip zstd content test"
         log_ok "Verified encrypted backup: $archive"
@@ -368,7 +392,9 @@ show_backup_info() {
     echo
     local found=0
     local f
-    for f in "${BACKUP_DIR}"/server-backup-*.tar.zst; do
+    for f in "${BACKUP_DIR}"/server-backup-*.tar.zst \
+             "${BACKUP_DIR}"/server-backup-*.tar.zst.gpg \
+             "${BACKUP_DIR}"/server-backup-*.tar.zst.enc; do
         [[ -f "$f" ]] || continue
         found=1
         local bytes size sha created
