@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 #
-#   JOJO BACKUPER v1.1
+#   JOJO BACKUPER v1.2
 #   by @B_KHANEMAN
 #   Server Migration Manager — Enterprise VPS Cloning & Migration
 #
@@ -14,6 +14,10 @@ cd "$SCRIPT_DIR"
 
 # shellcheck source=config.conf
 source "${SCRIPT_DIR}/config.conf"
+# Prefer VERSION file after GitHub updates (config.conf may be preserved locally)
+if [[ -f "${SCRIPT_DIR}/VERSION" ]]; then
+    SMM_VERSION="$(tr -d '[:space:]' < "${SCRIPT_DIR}/VERSION")"
+fi
 
 mkdir -p "$BACKUP_DIR" "$PROJECT_LOG_DIR" "${SCRIPT_DIR}/logs" "${SCRIPT_DIR}/backups"
 mkdir -p /var/log/server-migration 2>/dev/null || true
@@ -34,6 +38,7 @@ source "${SCRIPT_DIR}/modules/packages.sh"
 source "${SCRIPT_DIR}/modules/notify.sh"
 source "${SCRIPT_DIR}/modules/encrypt.sh"
 source "${SCRIPT_DIR}/modules/postcheck.sh"
+source "${SCRIPT_DIR}/modules/update.sh"
 source "${SCRIPT_DIR}/modules/backup.sh"
 source "${SCRIPT_DIR}/modules/restore.sh"
 
@@ -43,13 +48,18 @@ usage() {
     cat <<EOF
 Usage: sudo $0 [command]
 
-Quick migration:
-  deploy              Ask new server details + upload ALL backups + install toolkit
-  sudo-restore        Restore on new server using sudo
+Quick:
+  deploy              Deploy backups + toolkit to new server
+  sudo-restore        Restore on new server (sudo)
+  update              Update JOJO BACKUPER from GitHub
+  backup              Create full server backup
 
 Other:
-  backup | connect | upload | restore | verify | info | cleanup
+  connect | upload | verify | info | cleanup
   preflight | estimate | wizard | postcheck | report | schedule | notify-test
+
+One-line install + run (from any Ubuntu server):
+  curl -fsSL https://raw.githubusercontent.com/b-khaneman/jojo-backuper/main/bootstrap.sh | sudo bash
 
 EOF
 }
@@ -58,6 +68,7 @@ run_command() {
     case "${1:-}" in
         deploy|setup-new)   deploy_to_new_server ;;
         sudo-restore|restore-sudo) sudo_restore_on_new_server ;;
+        update|upgrade|self-update) update_from_github ;;
         backup)      create_full_backup ;;
         connect)     connect_new_server ;;
         upload)      upload_backup "${2:-}" ;;
@@ -87,7 +98,7 @@ main_menu() {
 
     while true; do
         print_menu
-        read -r -p "Select option [1-16]: " choice
+        read -r -p "Select option [1-17]: " choice
         echo
         case "$choice" in
             1)  deploy_to_new_server; pause_enter ;;
@@ -114,7 +125,8 @@ main_menu() {
                 pause_enter
                 ;;
             15) test_notifications; pause_enter ;;
-            16)
+            16) update_from_github ;;  # exec's into new migrate.sh
+            17)
                 echo
                 msg_ok "Goodbye."
                 exit 0

@@ -10,7 +10,7 @@
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%20%7C%2022.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![License](https://img.shields.io/badge/License-MIT-0B3D91?style=for-the-badge)](./LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.1.1-111111?style=for-the-badge)](./server-migration-manager/VERSION)
+[![Version](https://img.shields.io/badge/Version-1.2.0-111111?style=for-the-badge)](./server-migration-manager/VERSION)
 
 <br/>
 
@@ -128,35 +128,47 @@
 
 <div align="center">
 
-### **۳ دستور · آماده‌ی کار**
+### **یک دستور · نصب + اجرای خودکار**
 
 </div>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/b-khaneman/jojo-backuper/main/bootstrap.sh | sudo bash
+```
+
+> همین یک خط، پروژه را در `/opt/jojo-backuper` نصب می‌کند و **بلافاصله منو را باز می‌کند**.
+
+بعداً فقط بزن:
+
+```bash
+sudo jojo
+```
+
+<details>
+<summary><b>روش‌های دیگر</b></summary>
+
+<br/>
+
+**فقط نصب بدون اجرای منو:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/b-khaneman/jojo-backuper/main/bootstrap.sh | sudo JOJO_SKIP_RUN=yes bash
+```
+
+**کلون دستی:**
 
 ```bash
 cd /opt
 sudo git clone https://github.com/b-khaneman/jojo-backuper.git
 cd jojo-backuper/server-migration-manager
-sudo ./install.sh && sudo ./migrate.sh
+sudo bash install.sh --run
 ```
 
-> بعد از نصب می‌توانید با دستور **`sudo smm`** هم وارد منو شوید.
-
-<details>
-<summary><b>روش‌های دیگر نصب</b></summary>
-
-<br/>
-
-**دانلود ZIP**
-
-1. از صفحه GitHub گزینه **Code → Download ZIP**  
-2. به سرور قدیم منتقل کنید و از حالت فشرده خارج کنید  
-3. سپس:
+**آپدیت از داخل منو:** گزینه **`16) Update from GitHub`**  
+یا:
 
 ```bash
-cd server-migration-manager
-sudo chmod +x install.sh migrate.sh restore-agent.sh
-sudo ./install.sh
-sudo ./migrate.sh
+sudo jojo update
 ```
 
 </details>
@@ -352,7 +364,7 @@ jojo-backuper/
 
 ### **Version**
 
-**JOJO BACKUPER v1.1.1** · by **[@B_KHANEMAN](https://github.com/b-khaneman)**
+**JOJO BACKUPER v1.2.0** · by **[@B_KHANEMAN](https://github.com/b-khaneman)**
 
 **© 2026 JOJO BACKUPER · MIT License · @B_KHANEMAN**
 

@@ -1,13 +1,28 @@
 #!/usr/bin/env bash
 #===============================================================================
-# install.sh — Install dependencies for JOJO BACKUPER v1.1.1
+# install.sh — Install dependencies for JOJO BACKUPER
 # by @B_KHANEMAN — Ubuntu 20.04 / 22.04 / 24.04
+#
+# Usage:
+#   sudo bash install.sh          # install only
+#   sudo bash install.sh --run    # install then launch menu
 #===============================================================================
 
 set -euo pipefail
 
+RUN_AFTER="no"
+for arg in "$@"; do
+    case "$arg" in
+        --run|-r) RUN_AFTER="yes" ;;
+        --help|-h)
+            echo "Usage: sudo bash install.sh [--run]"
+            exit 0
+            ;;
+    esac
+done
+
 if [[ "$(id -u)" -ne 0 ]]; then
-    echo "Run as root: sudo $0"
+    echo "Run as root: sudo bash $0"
     exit 1
 fi
 
@@ -17,7 +32,7 @@ echo "[+] Updating apt..."
 apt-get update -qq
 
 PKGS=(
-    tar rsync openssh-client ca-certificates
+    tar rsync openssh-client ca-certificates git
     zstd pv gzip xz-utils
     coreutils util-linux
     iptables iptables-persistent
@@ -31,16 +46,33 @@ echo "[+] Installing: ${PKGS[*]}"
 apt-get install -y "${PKGS[@]}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-chmod +x "${SCRIPT_DIR}/migrate.sh" "${SCRIPT_DIR}/restore-agent.sh" "${SCRIPT_DIR}/install.sh"
+chmod +x "${SCRIPT_DIR}/migrate.sh" "${SCRIPT_DIR}/restore-agent.sh" "${SCRIPT_DIR}/install.sh" 2>/dev/null || true
+# Fix no-exec / missing +x (common Permission denied / os error 13)
+chmod +x "${SCRIPT_DIR}/install.sh" || true
 find "${SCRIPT_DIR}/modules" -type f -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true
+
+# Strip CRLF if present (Windows checkout)
+if command -v sed >/dev/null 2>&1; then
+    sed -i 's/\r$//' "${SCRIPT_DIR}/migrate.sh" "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/restore-agent.sh" 2>/dev/null || true
+    find "${SCRIPT_DIR}/modules" -type f -name '*.sh' -exec sed -i 's/\r$//' {} \; 2>/dev/null || true
+fi
 
 mkdir -p /var/log/server-migration
 mkdir -p "${SCRIPT_DIR}/backups" "${SCRIPT_DIR}/logs"
 
 ln -sfn "${SCRIPT_DIR}/migrate.sh" /usr/local/bin/smm
-echo "[OK] Symlink: smm → ${SCRIPT_DIR}/migrate.sh"
+ln -sfn "${SCRIPT_DIR}/migrate.sh" /usr/local/bin/jojo
+ln -sfn "${SCRIPT_DIR}/migrate.sh" /usr/local/bin/jojo-backuper
+
+echo "[OK] Symlinks: jojo / smm / jojo-backuper"
 echo
 echo "[OK] JOJO BACKUPER dependencies installed."
 echo "     Author: @B_KHANEMAN"
-echo "     Start with: sudo ./migrate.sh"
-echo "            or: sudo smm"
+echo "     Start:  sudo jojo"
+echo "         or: sudo bash ${SCRIPT_DIR}/migrate.sh"
+
+if [[ "$RUN_AFTER" == "yes" ]]; then
+    echo
+    echo "[+] Launching JOJO BACKUPER..."
+    exec bash "${SCRIPT_DIR}/migrate.sh"
+fi

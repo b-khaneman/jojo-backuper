@@ -420,7 +420,10 @@ print_menu() {
     echo -e "  ${C_WHITE}13)${C_RESET} Generate Migration Report"
     echo -e "  ${C_WHITE}14)${C_RESET} Schedule Weekly Backup"
     echo -e "  ${C_WHITE}15)${C_RESET} Test Notifications"
-    echo -e "  ${C_WHITE}16)${C_RESET} Exit"
+    echo
+    echo -e "  ${C_MAGENTA}${C_BOLD}─── System ───${C_RESET}"
+    echo -e "  ${C_WHITE}16)${C_RESET} ${C_MAGENTA}Update from GitHub${C_RESET}  ${C_DIM}(auto-pull latest JOJO BACKUPER)${C_RESET}"
+    echo -e "  ${C_WHITE}17)${C_RESET} Exit"
     echo
     echo -e "${C_DIM}-----------------------------------------${C_RESET}"
     if [[ -n "${REMOTE_HOST:-}" ]]; then
@@ -436,6 +439,9 @@ print_menu() {
     if [[ -f "${PROJECT_LOG_DIR}/.last_deploy" ]]; then
         echo -e "  Deploy: ${C_GREEN}ready for restore${C_RESET}"
     fi
+    local ver
+    ver="$(cat "${SCRIPT_DIR}/VERSION" 2>/dev/null || echo "${SMM_VERSION:-?}")"
+    echo -e "  Version: ${C_WHITE}v${ver}${C_RESET}  ${C_DIM}@B_KHANEMAN${C_RESET}"
     [[ "${ENCRYPT_BACKUP:-no}" == "yes" ]] && echo -e "  Crypto: ${C_YELLOW}ON (${ENCRYPT_METHOD})${C_RESET}"
     [[ "${NOTIFY_ENABLED:-no}" == "yes" ]] && echo -e "  Notify: ${C_GREEN}ON${C_RESET}"
     echo -e "${C_DIM}-----------------------------------------${C_RESET}"

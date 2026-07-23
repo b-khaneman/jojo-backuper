@@ -5,29 +5,29 @@
 
 </div>
 
+## One command (install + run)
+
 ```bash
-cd /opt
-sudo git clone https://github.com/b-khaneman/jojo-backuper.git
-cd jojo-backuper/server-migration-manager
-sudo ./install.sh
-sudo ./migrate.sh
+curl -fsSL https://raw.githubusercontent.com/b-khaneman/jojo-backuper/main/bootstrap.sh | sudo bash
 ```
 
-### Fast path
+Then later:
+
+```bash
+sudo jojo
+```
+
+### Update from server
+
+- Menu **`16) Update from GitHub`**
+- Or: `sudo jojo update`
+
+### Fast migration path
 
 | Step | Action |
 |:----:|:-------|
-| **1** | Menu **`3`** — Create Full Server Backup |
+| **1** | Menu **`3`** — Backup |
 | **2** | Menu **`1`** — Deploy to New Server |
-| **3** | Menu **`2`** — Restore Backup (**sudo**) |
-| **4** | Menu **`12`** — Post-Migration Health Check |
+| **3** | Menu **`2`** — Restore (sudo) |
 
-```bash
-sudo ./migrate.sh backup
-sudo ./migrate.sh deploy
-sudo ./migrate.sh sudo-restore
-```
-
-Full guide (فارسی): **[README.md](./README.md)**
-
-**Author: [@B_KHANEMAN](https://github.com/b-khaneman)**
+Full guide: **[README.md](./README.md)**
