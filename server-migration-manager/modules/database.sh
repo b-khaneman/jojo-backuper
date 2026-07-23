@@ -98,6 +98,31 @@ backup_databases() {
         [[ -d /etc/mongod.conf ]] || [[ -f /etc/mongod.conf ]] && cp -a /etc/mongod.conf "$out/" 2>/dev/null || true
     fi
 
+    #----- Databases inside Docker (PasarGuard panel, etc.) -----
+    if check_command docker && docker info &>/dev/null; then
+        mkdir -p "$out/docker-db"
+        local cid cname img
+        while read -r cid; do
+            [[ -z "$cid" ]] && continue
+            cname="$(docker inspect -f '{{.Name}}' "$cid" 2>/dev/null | sed 's|^/||')"
+            img="$(docker inspect -f '{{.Config.Image}}' "$cid" 2>/dev/null)"
+            # MySQL / MariaDB containers
+            if echo "$img $cname" | grep -qiE 'mysql|mariadb|mariadb|percona'; then
+                msg_info "  Dumping MySQL in Docker: $cname"
+                docker exec "$cid" sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --all-databases --single-transaction --quick --routines --triggers --events 2>/dev/null || mysqldump -uroot --all-databases --single-transaction --quick 2>/dev/null' \
+                    | gzip > "$out/docker-db/${cname}-mysql.sql.gz" 2>/dev/null || true
+                [[ -s "$out/docker-db/${cname}-mysql.sql.gz" ]] && any=1 && msg_ok "  Docker MySQL dump: $cname"
+            fi
+            # PostgreSQL / TimescaleDB containers
+            if echo "$img $cname" | grep -qiE 'postgres|timescale'; then
+                msg_info "  Dumping PostgreSQL in Docker: $cname"
+                docker exec "$cid" sh -c 'pg_dumpall -U "${POSTGRES_USER:-postgres}" 2>/dev/null || pg_dumpall -U postgres 2>/dev/null' \
+                    | gzip > "$out/docker-db/${cname}-postgres.sql.gz" 2>/dev/null || true
+                [[ -s "$out/docker-db/${cname}-postgres.sql.gz" ]] && any=1 && msg_ok "  Docker Postgres dump: $cname"
+            fi
+        done < <(docker ps -q 2>/dev/null)
+    fi
+
     if [[ $any -eq 0 ]]; then
         msg_dim "  No databases detected or dumps were empty"
         echo "none" > "$out/STATUS.txt"
@@ -174,6 +199,13 @@ restore_databases() {
         mongorestore "$src/mongodb" 2>/dev/null \
             && msg_ok "  MongoDB restored" \
             || msg_warn "  MongoDB restore had errors"
+    fi
+
+    # Stage Docker DB dumps for import after containers start
+    if [[ -d "$src/docker-db" ]] && [[ -n "$(ls -A "$src/docker-db" 2>/dev/null)" ]]; then
+        mkdir -p /root/smm-docker-db-restore
+        cp -a "$src/docker-db/." /root/smm-docker-db-restore/
+        msg_info "  Docker DB dumps staged in /root/smm-docker-db-restore (imported after compose up)"
     fi
 
     msg_ok "Database restore phase completed"

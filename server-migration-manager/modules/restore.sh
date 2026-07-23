@@ -815,6 +815,8 @@ restore_from_archive() {
         [[ -d "$extras/databases" ]] && restore_databases "$extras/databases"
         show_progress 92
         [[ -d "$extras/docker" ]] && restore_docker "$extras/docker"
+        show_progress 94
+        [[ -d "$extras/pasarguard" ]] && restore_pasarguard "$extras/pasarguard"
         show_progress 95
         [[ -d "$extras/services" ]] && restore_services "$extras/services"
     fi

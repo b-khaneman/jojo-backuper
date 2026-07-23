@@ -147,6 +147,8 @@ create_full_backup() {
     declare -f backup_databases &>/dev/null && backup_databases "$extras_dir/databases"
     show_progress 28
     declare -f backup_docker &>/dev/null && backup_docker "$extras_dir/docker"
+    show_progress 36
+    declare -f backup_pasarguard &>/dev/null && backup_pasarguard "$extras_dir/pasarguard"
     show_progress 38
     declare -f backup_ssl &>/dev/null && backup_ssl "$extras_dir/ssl"
     show_progress 45

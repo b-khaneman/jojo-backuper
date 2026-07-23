@@ -70,8 +70,11 @@ backup_docker() {
         while read -r vol; do
             [[ -z "$vol" ]] && continue
             msg_dim "    Volume: $vol"
-            docker run --rm -v "${vol}:/v:ro" -v "$out/volume-data:/backup" alpine \
-                tar czf "/backup/${vol}.tar.gz" -C /v . 2>/dev/null || true
+            docker run --rm -v "${vol}:/v:ro" -v "$out/volume-data:/backup" alpine:3.20 \
+                tar czf "/backup/${vol}.tar.gz" -C /v . 2>/dev/null || \
+            docker run --rm -v "${vol}:/v:ro" -v "$out/volume-data:/backup" busybox \
+                tar czf "/backup/${vol}.tar.gz" -C /v . 2>/dev/null || \
+                msg_warn "    Failed to export volume: $vol"
         done < <(docker volume ls -q 2>/dev/null)
 
         echo "ok images=$count" > "$out/STATUS.txt"
@@ -163,7 +166,9 @@ restore_docker() {
             [[ -f "$vf" ]] || continue
             vol="$(basename "$vf" .tar.gz)"
             docker volume create "$vol" >/dev/null 2>&1 || true
-            docker run --rm -v "${vol}:/v" -v "$(dirname "$vf"):/backup:ro" alpine \
+            docker run --rm -v "${vol}:/v" -v "$(dirname "$vf"):/backup:ro" alpine:3.20 \
+                sh -c "cd /v && tar xzf /backup/$(basename "$vf")" 2>/dev/null || \
+            docker run --rm -v "${vol}:/v" -v "$(dirname "$vf"):/backup:ro" busybox \
                 sh -c "cd /v && tar xzf /backup/$(basename "$vf")" 2>/dev/null || true
             msg_dim "    Restored volume: $vol"
         done
