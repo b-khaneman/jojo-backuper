@@ -142,20 +142,23 @@ restore_docker() {
         return 0
     fi
 
-    # Load images
-    if [[ -d "$src/images" ]]; then
-        msg_info "  Loading Docker images..."
+    # Load images (optional — can peg CPU/RAM on small VPS)
+    if [[ "${RESTORE_DOCKER_IMAGES:-yes}" == "yes" && -d "$src/images" ]]; then
+        msg_info "  Loading Docker images (nice, one-by-one)..."
         local imgf
         for imgf in "$src/images"/*; do
             [[ -f "$imgf" ]] || continue
             msg_dim "    Loading $(basename "$imgf")"
             case "$imgf" in
-                *.tar.zst) zstd -dc "$imgf" | docker load ;;
-                *.tar) docker load -i "$imgf" ;;
-                *) docker load -i "$imgf" 2>/dev/null || true ;;
+                *.tar.zst) nice -n 19 ionice -c3 zstd -dc -T1 "$imgf" | nice -n 19 docker load ;;
+                *.tar) nice -n 19 ionice -c3 docker load -i "$imgf" ;;
+                *) nice -n 19 docker load -i "$imgf" 2>/dev/null || true ;;
             esac
+            sleep 2
         done
         msg_ok "  Images loaded"
+    else
+        msg_dim "  Skipping Docker image load (RESTORE_DOCKER_IMAGES=no or empty)"
     fi
 
     # Restore volumes
@@ -171,6 +174,7 @@ restore_docker() {
             docker run --rm -v "${vol}:/v" -v "$(dirname "$vf"):/backup:ro" busybox \
                 sh -c "cd /v && tar xzf /backup/$(basename "$vf")" 2>/dev/null || true
             msg_dim "    Restored volume: $vol"
+            sleep 1
         done
     fi
 
@@ -179,6 +183,12 @@ restore_docker() {
         mkdir -p /opt/smm-compose
         cp -a "$src/compose/." /opt/smm-compose/
         msg_info "  Compose files placed in /opt/smm-compose"
+        if [[ "${RESTORE_DOCKER_AUTO_START:-no}" == "yes" ]]; then
+            msg_warn "  Auto-start enabled — starting compose stacks (may use heavy CPU)"
+        else
+            msg_warn "  NOT auto-starting containers (RESTORE_DOCKER_AUTO_START=no)"
+            msg_dim "  Start manually later: cd /opt/pasarguard && docker compose up -d"
+        fi
     fi
 
     msg_ok "Docker restore completed"

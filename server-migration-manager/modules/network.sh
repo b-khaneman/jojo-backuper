@@ -47,7 +47,13 @@ restore_network() {
     local src="${1:-}"
     [[ -z "$src" || ! -d "$src" ]] && { msg_warn "No network backup found to restore"; return 0; }
 
-    if [[ "${RESTORE_NETWORK:-yes}" != "yes" ]]; then
+    if [[ "${KEEP_TARGET_NETWORK:-yes}" == "yes" ]]; then
+        msg_warn "Keeping NEW server network (KEEP_TARGET_NETWORK=yes) — old netplan NOT applied"
+        msg_dim "  Old network configs saved for reference under extras only"
+        return 0
+    fi
+
+    if [[ "${RESTORE_NETWORK:-no}" != "yes" ]]; then
         msg_dim "Network restore skipped (config)"
         return 0
     fi

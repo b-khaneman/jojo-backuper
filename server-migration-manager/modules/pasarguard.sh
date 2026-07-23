@@ -155,8 +155,12 @@ restore_pasarguard() {
             mkdir -p "$orig"
             rsync -a --exclude '.original_path' "$proj" "$orig/" 2>/dev/null || cp -a "$proj"/. "$orig/" 2>/dev/null || true
             if [[ -f "$orig/docker-compose.yml" || -f "$orig/compose.yml" ]]; then
-                (cd "$orig" && (docker compose up -d 2>/dev/null || docker-compose up -d 2>/dev/null)) || \
-                    msg_warn "  Could not start compose in $orig — start manually"
+                if [[ "${RESTORE_DOCKER_AUTO_START:-no}" == "yes" ]]; then
+                    (cd "$orig" && (docker compose up -d 2>/dev/null || docker-compose up -d 2>/dev/null)) || \
+                        msg_warn "  Could not start compose in $orig — start manually"
+                else
+                    msg_dim "  Compose ready at $orig (not started — RESTORE_DOCKER_AUTO_START=no)"
+                fi
             fi
         done
     fi
@@ -189,13 +193,18 @@ restore_pasarguard() {
 
     # Official panel path
     if [[ -d /opt/pasarguard ]]; then
-        msg_info "  Starting /opt/pasarguard stack..."
-        (cd /opt/pasarguard && (docker compose up -d 2>/dev/null || docker-compose up -d 2>/dev/null)) || true
-        sleep 5
+        if [[ "${RESTORE_DOCKER_AUTO_START:-no}" == "yes" ]]; then
+            msg_info "  Starting /opt/pasarguard stack..."
+            (cd /opt/pasarguard && (docker compose up -d 2>/dev/null || docker-compose up -d 2>/dev/null)) || true
+            sleep 5
+        else
+            msg_warn "  /opt/pasarguard present — start later (avoid CPU lock):"
+            msg_dim "    cd /opt/pasarguard && docker compose up -d"
+        fi
     fi
 
-    # Import staged Docker DB dumps (nodes live in panel DB)
-    if [[ -d /root/smm-docker-db-restore ]] && check_command docker; then
+    # Import staged Docker DB dumps only if containers are already running
+    if [[ "${RESTORE_DOCKER_AUTO_START:-no}" == "yes" && -d /root/smm-docker-db-restore ]] && check_command docker; then
         local dumpf cid cname
         for dumpf in /root/smm-docker-db-restore/*-mysql.sql.gz; do
             [[ -f "$dumpf" ]] || continue

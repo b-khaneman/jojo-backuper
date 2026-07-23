@@ -68,17 +68,19 @@ restore_services() {
         done < "$src/enabled.list"
     fi
 
-    # Restart commonly important services if present
-    local critical=(nginx apache2 httpd mysql mariadb postgresql redis-server redis \
-                    mongod docker containerd ssh sshd fail2ban netfilter-persistent \
-                    nftables ufw cron crond)
+    # Restart only SSH-safe basics — NOT docker/panel (CPU lock risk)
+    local critical=(ssh sshd cron crond)
     local svc
     for svc in "${critical[@]}"; do
         if systemctl list-unit-files "${svc}.service" &>/dev/null; then
             systemctl restart "$svc" 2>/dev/null || true
         fi
     done
+    msg_warn "Heavy services (docker/nginx/db) NOT auto-restarted — start manually after SSH check"
 
+    msg_ok "Services restore completed"
+    log_ok "Services restore completed"
+}
     msg_ok "Services restore completed"
     log_ok "Services restore completed"
 }

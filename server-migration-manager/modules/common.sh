@@ -555,3 +555,26 @@ print_menu() {
     echo -e "${C_DIM}-----------------------------------------${C_RESET}"
     echo
 }
+
+#-------------------------------------------------------------------------------
+# Cloud-init cleanup (after restore — avoid regenerating wrong network)
+#-------------------------------------------------------------------------------
+clean_cloud_init() {
+    if [[ "${CLEAN_CLOUD_INIT:-yes}" != "yes" ]]; then
+        return 0
+    fi
+    msg_step "Cleaning cloud-init instance state (keep datasources)..."
+    # Do NOT wipe /etc/netplan — KEEP_TARGET_NETWORK already restored it
+    cloud-init clean --logs 2>/dev/null || true
+    rm -rf /var/lib/cloud/instances/* 2>/dev/null || true
+    rm -f /var/lib/cloud/instance 2>/dev/null || true
+    # Prevent cloud-init from rewriting network on next boot if we keep target netplan
+    if [[ "${KEEP_TARGET_NETWORK:-yes}" == "yes" ]]; then
+        mkdir -p /etc/cloud/cloud.cfg.d
+        cat > /etc/cloud/cloud.cfg.d/99-smm-disable-network.cfg <<'EOF'
+network:
+  config: disabled
+EOF
+    fi
+    msg_ok "cloud-init cleaned"
+}

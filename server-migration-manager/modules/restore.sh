@@ -402,16 +402,16 @@ sudo_restore_on_new_server() {
 
     declare -f create_restore_point_remote &>/dev/null && create_restore_point_remote
 
-    local reboot_flag="${REBOOT_AFTER_RESTORE:-yes}"
+    local reboot_flag="${REBOOT_AFTER_RESTORE:-no}"
     local rb=""
     if declare -f tty_read &>/dev/null; then
-        tty_read "Reboot new server after restore? [Y/n]: " rb
+        tty_read "Reboot new server after restore? [y/N]: " rb
     else
-        read -r -p "Reboot new server after restore? [Y/n]: " rb < /dev/tty || true
+        read -r -p "Reboot new server after restore? [y/N]: " rb < /dev/tty || true
     fi
-    case "${rb:-Y}" in
-        n|N|no|NO) reboot_flag="no" ;;
-        *) reboot_flag="yes" ;;
+    case "${rb:-N}" in
+        y|Y|yes|YES) reboot_flag="yes" ;;
+        *) reboot_flag="no" ;;
     esac
 
     msg_step "Starting restore with sudo on ${REMOTE_HOST}..."
@@ -617,7 +617,7 @@ restore_server_remote() {
     restore_script=$(cat <<EOF
 set -e
 chmod +x '$agent_path'
-bash '$agent_path' --archive '${REMOTE_PATH}/${archive_name}' --yes --reboot=${REBOOT_AFTER_RESTORE:-yes}
+bash '$agent_path' --archive '${REMOTE_PATH}/${archive_name}' --yes --reboot=${REBOOT_AFTER_RESTORE:-no}
 EOF
 )
     if remote_sudo_script "$restore_script"; then
@@ -625,7 +625,7 @@ EOF
         log_ok "Remote restore completed on $REMOTE_HOST"
         declare -f notify_restore_done &>/dev/null && notify_restore_done || true
     else
-        if [[ "${REBOOT_AFTER_RESTORE:-yes}" == "yes" ]]; then
+        if [[ "${REBOOT_AFTER_RESTORE:-no}" == "yes" ]]; then
             msg_warn "SSH ended during restore/reboot — waiting for host..."
         else
             msg_error "Remote restore reported failure — check /var/log/server-migration/restore.log on new server"
@@ -637,7 +637,7 @@ EOF
 
     # Post-restore verification
     msg_step "Waiting for remote host after potential reboot..."
-    if [[ "${REBOOT_AFTER_RESTORE:-yes}" == "yes" ]]; then
+    if [[ "${REBOOT_AFTER_RESTORE:-no}" == "yes" ]]; then
         sleep 15
         local i
         for i in $(seq 1 30); do
@@ -748,15 +748,34 @@ restore_from_archive() {
     local work="/tmp/smm-restore-$$"
     mkdir -p "$work/rootfs" "$work/extract"
 
-    msg_step "Extracting backup archive (this takes time)..."
+    # Preserve CRITICAL target-host identity before any overwrite
+    local preserve="/tmp/smm-preserve-$$"
+    mkdir -p "$preserve/netplan" "$preserve/ssh" "$preserve/cloud"
+    cp -a /etc/fstab "$preserve/fstab" 2>/dev/null || true
+    cp -a /etc/netplan/. "$preserve/netplan/" 2>/dev/null || true
+    cp -a /etc/hostname "$preserve/hostname" 2>/dev/null || true
+    cp -a /etc/hosts "$preserve/hosts" 2>/dev/null || true
+    cp -a /etc/resolv.conf "$preserve/resolv.conf" 2>/dev/null || true
+    [[ -d /etc/ssh ]] && cp -a /etc/ssh/ssh_host_* "$preserve/ssh/" 2>/dev/null || true
+    [[ -d /etc/cloud ]] && cp -a /etc/cloud/. "$preserve/cloud/" 2>/dev/null || true
+    cp -a /etc/machine-id "$preserve/machine-id" 2>/dev/null || true
+    blkid > "$preserve/blkid.txt" 2>/dev/null || true
+    msg_ok "Preserved target fstab/netplan/SSH host keys (anti-brick)"
+
+    local nice_n="${RESTORE_NICE:-19}"
+    local ionice_c="${RESTORE_IONICE_CLASS:-3}"
+    local run_soft=(nice -n "$nice_n")
+    check_command ionice && run_soft=(ionice -c "$ionice_c" nice -n "$nice_n")
+
+    msg_step "Extracting backup archive (nice/ionice — avoids 100% CPU lock)..."
     show_progress 5
     if check_command pv; then
         local sz
         sz="$(stat -c%s "$work_archive")"
-        pv -s "$sz" "$work_archive" | zstd -d | tar -xpf - -C "$work/extract" 2>>"${LOG_DIR}/restore.log"
+        pv -s "$sz" "$work_archive" | "${run_soft[@]}" zstd -d -T2 | "${run_soft[@]}" tar -xpf - -C "$work/extract" 2>>"${LOG_DIR}/restore.log"
     else
         start_spinner "Extracting tar.zst..."
-        zstd -dc "$work_archive" | tar -xpf - -C "$work/extract" 2>>"${LOG_DIR}/restore.log"
+        "${run_soft[@]}" zstd -dc -T2 "$work_archive" | "${run_soft[@]}" tar -xpf - -C "$work/extract" 2>>"${LOG_DIR}/restore.log"
         stop_spinner
     fi
     show_progress 40
@@ -773,28 +792,76 @@ restore_from_archive() {
         declare -f restore_packages &>/dev/null && restore_packages "$extras/packages"
     fi
 
-    msg_step "Restoring filesystem trees..."
+    msg_step "Restoring filesystem trees (safe mode)..."
     local tree
     for tree in etc home root opt usr var srv boot; do
+        if [[ "$tree" == "boot" && "${RESTORE_BOOT:-no}" != "yes" ]]; then
+            msg_warn "  Skipping /boot (RESTORE_BOOT=no) — prevents kernel brick"
+            continue
+        fi
+        if [[ "$tree" == "usr" && "${RESTORE_USR:-no}" != "yes" ]]; then
+            msg_warn "  Skipping full /usr (RESTORE_USR=no) — prevents library/OS brick"
+            # Still restore selected app bins if present under opt/home
+            continue
+        fi
         if [[ -d "$work/extract/$tree" ]]; then
             msg_info "  Syncing /$tree ..."
             if [[ "$tree" == "etc" ]]; then
-                rsync -aAX --exclude='fstab' --exclude='netplan/**' --exclude='cloud/**' \
+                "${run_soft[@]}" rsync -aAX \
+                    --exclude='fstab' \
+                    --exclude='netplan/**' \
+                    --exclude='cloud/**' \
+                    --exclude='machine-id' \
+                    --exclude='resolv.conf' \
+                    --exclude='hostname' \
+                    --exclude='hosts' \
+                    --exclude='ssh/ssh_host_*' \
+                    --exclude='crypttab' \
+                    --exclude='default/grub' \
+                    --exclude='grub.d/**' \
+                    --exclude='kernel/**' \
+                    --exclude='modules*/**' \
+                    --exclude='initramfs-tools/**' \
                     "$work/extract/$tree/" "/$tree/" 2>>"${LOG_DIR}/restore.log" || true
-                [[ -f "$work/extract/etc/fstab" ]] && cp -a /etc/fstab /etc/fstab.smm-pre 2>/dev/null; \
-                    cp -a "$work/extract/etc/fstab" /etc/fstab 2>/dev/null || true
-                [[ -d "$work/extract/etc/netplan" ]] && mkdir -p /etc/netplan && \
-                    cp -a "$work/extract/etc/netplan/." /etc/netplan/ 2>/dev/null || true
+                # Archive old fstab for reference only — never apply unless explicitly enabled
+                if [[ -f "$work/extract/etc/fstab" ]]; then
+                    cp -a "$work/extract/etc/fstab" /etc/fstab.smm-from-old 2>/dev/null || true
+                    if [[ "${RESTORE_FSTAB:-no}" == "yes" ]]; then
+                        msg_warn "  Applying OLD fstab (RESTORE_FSTAB=yes) — risky"
+                        cp -a "$work/extract/etc/fstab" /etc/fstab 2>/dev/null || true
+                    fi
+                fi
             else
-                rsync -aAX --exclude='**/docker/overlay2/**' --exclude='**/containerd/**' \
+                "${run_soft[@]}" rsync -aAX \
+                    --exclude='**/docker/overlay2/**' \
+                    --exclude='**/containerd/**' \
+                    --exclude='**/docker/image/**' \
                     "$work/extract/$tree/" "/$tree/" 2>>"${LOG_DIR}/restore.log" || \
-                rsync -a "$work/extract/$tree/" "/$tree/" 2>>"${LOG_DIR}/restore.log" || true
+                "${run_soft[@]}" rsync -a "$work/extract/$tree/" "/$tree/" 2>>"${LOG_DIR}/restore.log" || true
             fi
         fi
-        if [[ -d "$work/extract/./$tree" ]]; then
-            rsync -a "$work/extract/./$tree/" "/$tree/" 2>/dev/null || true
-        fi
     done
+
+    # Always restore NEW server identity/network (anti-brick)
+    msg_step "Re-applying target network & boot identity..."
+    [[ -f "$preserve/fstab" ]] && cp -a "$preserve/fstab" /etc/fstab
+    if [[ "${KEEP_TARGET_NETWORK:-yes}" == "yes" ]]; then
+        mkdir -p /etc/netplan
+        rm -rf /etc/netplan/* 2>/dev/null || true
+        cp -a "$preserve/netplan/." /etc/netplan/ 2>/dev/null || true
+        [[ -f "$preserve/hostname" ]] && cp -a "$preserve/hostname" /etc/hostname
+        [[ -f "$preserve/hosts" ]] && cp -a "$preserve/hosts" /etc/hosts
+        [[ -f "$preserve/resolv.conf" ]] && cp -a "$preserve/resolv.conf" /etc/resolv.conf 2>/dev/null || true
+        if [[ -d "$preserve/cloud" ]]; then
+            mkdir -p /etc/cloud
+            cp -a "$preserve/cloud/." /etc/cloud/ 2>/dev/null || true
+        fi
+    fi
+    if [[ "${PRESERVE_NEW_SSH_HOST_KEYS:-yes}" == "yes" ]]; then
+        cp -a "$preserve/ssh/." /etc/ssh/ 2>/dev/null || true
+    fi
+    [[ -f "$preserve/machine-id" ]] && cp -a "$preserve/machine-id" /etc/machine-id 2>/dev/null || true
+    update-grub 2>/dev/null || true
     show_progress 70
 
     if [[ -n "$extras" ]]; then
@@ -845,9 +912,13 @@ restore_from_archive() {
     [[ "$work_archive" != "$archive" ]] && rm -f "$work_archive" 2>/dev/null || true
 
     if [[ "$do_reboot" == "yes" ]]; then
-        msg_warn "Rebooting in 5 seconds..."
-        sleep 5
+        msg_warn "Reboot requested. Waiting 15s — Ctrl+C to cancel if SSH looks unstable."
+        msg_dim "Tip: default is REBOOT_AFTER_RESTORE=no (safer). Verify network first."
+        sleep 15
         systemctl reboot || reboot
+    else
+        msg_ok "Restore done WITHOUT reboot (safe). Check SSH, then reboot manually when ready:"
+        msg_dim "  systemctl reboot"
     fi
     return 0
 }
