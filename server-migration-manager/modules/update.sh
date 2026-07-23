@@ -115,6 +115,7 @@ update_from_github() {
     msg_step "Re-running dependency installer..."
     bash "${app_dir}/install.sh" || msg_warn "install.sh reported errors — continuing"
 
+    rm -f /usr/local/bin/smm /usr/local/bin/jojo /usr/local/bin/jojo-backuper
     ln -sfn "${app_dir}/migrate.sh" /usr/local/bin/smm
     ln -sfn "${app_dir}/migrate.sh" /usr/local/bin/jojo
     ln -sfn "${app_dir}/migrate.sh" /usr/local/bin/jojo-backuper

@@ -46,6 +46,14 @@ echo "[+] Installing: ${PKGS[*]}"
 apt-get install -y "${PKGS[@]}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Prefer canonical path if this file is reached via odd wrappers
+if command -v readlink >/dev/null 2>&1; then
+    _canon="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
+    if [[ -n "$_canon" ]]; then
+        SCRIPT_DIR="$(cd "$(dirname "$_canon")" && pwd)"
+    fi
+    unset _canon
+fi
 chmod +x "${SCRIPT_DIR}/migrate.sh" "${SCRIPT_DIR}/restore-agent.sh" "${SCRIPT_DIR}/install.sh" 2>/dev/null || true
 # Fix no-exec / missing +x (common Permission denied / os error 13)
 chmod +x "${SCRIPT_DIR}/install.sh" || true
@@ -60,9 +68,16 @@ fi
 mkdir -p /var/log/server-migration
 mkdir -p "${SCRIPT_DIR}/backups" "${SCRIPT_DIR}/logs"
 
+# Always recreate clean symlinks (never copy migrate.sh into /usr/local/bin)
+rm -f /usr/local/bin/smm /usr/local/bin/jojo /usr/local/bin/jojo-backuper
 ln -sfn "${SCRIPT_DIR}/migrate.sh" /usr/local/bin/smm
 ln -sfn "${SCRIPT_DIR}/migrate.sh" /usr/local/bin/jojo
 ln -sfn "${SCRIPT_DIR}/migrate.sh" /usr/local/bin/jojo-backuper
+
+# Verify symlink points to real migrate.sh
+if [[ ! -L /usr/local/bin/jojo ]] || [[ ! -f "$(readlink -f /usr/local/bin/jojo)" ]]; then
+    echo "[WARN] Symlink verification failed — use: sudo bash ${SCRIPT_DIR}/migrate.sh"
+fi
 
 echo "[OK] Symlinks: jojo / smm / jojo-backuper"
 echo

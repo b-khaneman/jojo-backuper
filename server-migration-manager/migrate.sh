@@ -9,8 +9,24 @@
 
 set -o pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve real script directory even when launched via /usr/local/bin/jojo symlink
+_SMM_SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$_SMM_SOURCE" ]]; do
+    _SMM_DIR="$(cd -P "$(dirname "$_SMM_SOURCE")" && pwd)"
+    _SMM_SOURCE="$(readlink "$_SMM_SOURCE")"
+    [[ "$_SMM_SOURCE" != /* ]] && _SMM_SOURCE="${_SMM_DIR}/${_SMM_SOURCE}"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$_SMM_SOURCE")" && pwd)"
+unset _SMM_SOURCE _SMM_DIR
 cd "$SCRIPT_DIR"
+
+if [[ ! -f "${SCRIPT_DIR}/config.conf" || ! -d "${SCRIPT_DIR}/modules" ]]; then
+    echo "[ERROR] JOJO BACKUPER files not found next to migrate.sh"
+    echo "        Expected: ${SCRIPT_DIR}/config.conf and ${SCRIPT_DIR}/modules/"
+    echo "        Fix with:"
+    echo "          curl -fsSL https://raw.githubusercontent.com/b-khaneman/jojo-backuper/main/bootstrap.sh | sudo bash"
+    exit 1
+fi
 
 # shellcheck source=config.conf
 source "${SCRIPT_DIR}/config.conf"

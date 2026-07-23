@@ -61,7 +61,8 @@ find "$APP_DIR/modules" -type f -name '*.sh' -exec chmod +x {} \; 2>/dev/null ||
 echo "[+] Running installer..."
 bash "${APP_DIR}/install.sh"
 
-# Convenience symlinks
+# Convenience symlinks (remove any broken copies first)
+rm -f /usr/local/bin/smm /usr/local/bin/jojo /usr/local/bin/jojo-backuper
 ln -sfn "${APP_DIR}/migrate.sh" /usr/local/bin/smm
 ln -sfn "${APP_DIR}/migrate.sh" /usr/local/bin/jojo
 ln -sfn "${APP_DIR}/migrate.sh" /usr/local/bin/jojo-backuper
