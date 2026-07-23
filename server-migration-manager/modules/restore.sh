@@ -221,7 +221,8 @@ _build_ssh_rsh() {
     mapfile -t opts < <(build_ssh_opts)
     if [[ "${AUTH_METHOD:-key}" == "password" && -n "${SSH_PASSWORD:-}" ]]; then
         export SSHPASS="$SSH_PASSWORD"
-        SSH_RSH="sshpass -e ssh ${opts[*]}"
+        # shellcheck disable=SC2089
+        SSH_RSH="sshpass -e -P assword ssh ${opts[*]}"
     else
         SSH_RSH="ssh ${opts[*]}"
     fi

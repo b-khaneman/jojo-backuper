@@ -285,14 +285,14 @@ build_ssh_opts() {
     opts+=(-p "${REMOTE_PORT:-22}")
 
     if [[ "${AUTH_METHOD:-key}" == "password" ]]; then
-        # Prevent local keys/agent from exhausting auth attempts before password
+        # Prefer password; keep keyboard-interactive (Ubuntu often uses it for passwords)
         opts+=(
-            -o PreferredAuthentications=password
+            -o PreferredAuthentications=password,keyboard-interactive
             -o PubkeyAuthentication=no
             -o PasswordAuthentication=yes
-            -o KbdInteractiveAuthentication=no
             -o NumberOfPasswordPrompts=1
             -o IdentitiesOnly=yes
+            -o IdentityAgent=none
         )
     elif [[ -n "${SSH_KEY:-}" && -f "${SSH_KEY}" ]]; then
         opts+=(-i "$SSH_KEY" -o IdentitiesOnly=yes -o PreferredAuthentications=publickey)
@@ -307,6 +307,9 @@ ssh_cmd() {
     mapfile -t opts < <(build_ssh_opts)
 
     if [[ "${AUTH_METHOD:-key}" == "password" ]]; then
+        if [[ -z "${SSH_PASSWORD:-}" && -f "${PROJECT_LOG_DIR:-}/.ssh_password" ]]; then
+            SSH_PASSWORD="$(cat "${PROJECT_LOG_DIR}/.ssh_password")"
+        fi
         if [[ -z "${SSH_PASSWORD:-}" ]]; then
             msg_error "SSH password is empty — re-enter connection details"
             return 1
@@ -314,7 +317,9 @@ ssh_cmd() {
         if ! check_command sshpass; then
             apt-get install -y sshpass >/dev/null 2>&1 || die "sshpass required: apt-get install -y sshpass"
         fi
-        SSHPASS="$SSH_PASSWORD" sshpass -e ssh "${opts[@]}" \
+        # -e uses SSHPASS env (safer than -p for special chars)
+        # -P 'assword' matches password / Password / keyboard-interactive prompts
+        SSHPASS="$SSH_PASSWORD" sshpass -e -P 'assword' ssh "${opts[@]}" \
             "${REMOTE_USER}@${REMOTE_HOST}" "$remote_cmd"
     else
         ssh "${opts[@]}" "${REMOTE_USER}@${REMOTE_HOST}" "$remote_cmd"
@@ -331,12 +336,16 @@ scp_cmd() {
     )
     if [[ "${AUTH_METHOD:-key}" == "password" ]]; then
         scp_opts+=(
-            -o PreferredAuthentications=password
+            -o PreferredAuthentications=password,keyboard-interactive
             -o PubkeyAuthentication=no
             -o PasswordAuthentication=yes
             -o IdentitiesOnly=yes
+            -o IdentityAgent=none
         )
-        SSHPASS="$SSH_PASSWORD" sshpass -e scp "${scp_opts[@]}" "$src" "$dst"
+        if [[ -z "${SSH_PASSWORD:-}" && -f "${PROJECT_LOG_DIR:-}/.ssh_password" ]]; then
+            SSH_PASSWORD="$(cat "${PROJECT_LOG_DIR}/.ssh_password")"
+        fi
+        SSHPASS="$SSH_PASSWORD" sshpass -e -P 'assword' scp "${scp_opts[@]}" "$src" "$dst"
     else
         if [[ -n "${SSH_KEY:-}" && -f "${SSH_KEY}" ]]; then
             scp_opts+=(-i "$SSH_KEY" -o IdentitiesOnly=yes)
