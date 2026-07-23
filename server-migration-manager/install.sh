@@ -8,7 +8,7 @@
 #   sudo bash install.sh --run    # install then launch menu
 #===============================================================================
 
-set -euo pipefail
+set -uo pipefail
 
 RUN_AFTER="no"
 for arg in "$@"; do
@@ -27,26 +27,34 @@ if [[ "$(id -u)" -ne 0 ]]; then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+
+# Avoid interactive prompts from iptables-persistent
+echo 'iptables-persistent iptables-persistent/autosave_v4 boolean true' | debconf-set-selections 2>/dev/null || true
+echo 'iptables-persistent iptables-persistent/autosave_v6 boolean true' | debconf-set-selections 2>/dev/null || true
 
 echo "[+] Updating apt..."
-apt-get update -qq
+apt-get update -qq || apt-get update
 
 PKGS=(
     tar rsync openssh-client ca-certificates git
     zstd pv gzip xz-utils
     coreutils util-linux
-    iptables iptables-persistent
+    iptables
     curl wget
     gnupg openssl
     sshpass
     jq
+    bsdutils
 )
 
 echo "[+] Installing: ${PKGS[*]}"
-apt-get install -y "${PKGS[@]}"
+apt-get install -y "${PKGS[@]}" || apt-get install -y --fix-missing "${PKGS[@]}"
+
+# Optional packages (do not fail install)
+apt-get install -y iptables-persistent 2>/dev/null || true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Prefer canonical path if this file is reached via odd wrappers
 if command -v readlink >/dev/null 2>&1; then
     _canon="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
     if [[ -n "$_canon" ]]; then
@@ -54,12 +62,10 @@ if command -v readlink >/dev/null 2>&1; then
     fi
     unset _canon
 fi
+
 chmod +x "${SCRIPT_DIR}/migrate.sh" "${SCRIPT_DIR}/restore-agent.sh" "${SCRIPT_DIR}/install.sh" 2>/dev/null || true
-# Fix no-exec / missing +x (common Permission denied / os error 13)
-chmod +x "${SCRIPT_DIR}/install.sh" || true
 find "${SCRIPT_DIR}/modules" -type f -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true
 
-# Strip CRLF if present (Windows checkout)
 if command -v sed >/dev/null 2>&1; then
     sed -i 's/\r$//' "${SCRIPT_DIR}/migrate.sh" "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/restore-agent.sh" 2>/dev/null || true
     find "${SCRIPT_DIR}/modules" -type f -name '*.sh' -exec sed -i 's/\r$//' {} \; 2>/dev/null || true
@@ -68,29 +74,33 @@ fi
 mkdir -p /var/log/server-migration
 mkdir -p "${SCRIPT_DIR}/backups" "${SCRIPT_DIR}/logs"
 
-# Always recreate clean symlinks (never copy migrate.sh into /usr/local/bin)
-rm -f /usr/local/bin/smm /usr/local/bin/jojo /usr/local/bin/jojo-backuper
+rm -f /usr/local/bin/smm /usr/local/bin/jojo /usr/local/bin/jojo-backuper /usr/local/bin/jojo-menu
 ln -sfn "${SCRIPT_DIR}/migrate.sh" /usr/local/bin/smm
 ln -sfn "${SCRIPT_DIR}/migrate.sh" /usr/local/bin/jojo
 ln -sfn "${SCRIPT_DIR}/migrate.sh" /usr/local/bin/jojo-backuper
 
-# Verify symlink points to real migrate.sh
-if [[ ! -L /usr/local/bin/jojo ]] || [[ ! -f "$(readlink -f /usr/local/bin/jojo)" ]]; then
-    echo "[WARN] Symlink verification failed — use: sudo bash ${SCRIPT_DIR}/migrate.sh"
-fi
+# Absolute-path launcher (immune to symlink SCRIPT_DIR bugs)
+cat > /usr/local/bin/jojo-menu <<EOF
+#!/usr/bin/env bash
+exec bash "${SCRIPT_DIR}/migrate.sh" "\$@"
+EOF
+chmod +x /usr/local/bin/jojo-menu
 
-echo "[OK] Symlinks: jojo / smm / jojo-backuper"
+echo "[OK] Launchers: jojo-menu / jojo / smm"
 echo
 echo "[OK] JOJO BACKUPER dependencies installed."
 echo "     Author: @B_KHANEMAN"
-echo "     Start:  sudo jojo"
+echo "     Start:  sudo jojo-menu"
 echo "         or: sudo bash ${SCRIPT_DIR}/migrate.sh"
 
 if [[ "$RUN_AFTER" == "yes" ]]; then
     echo
     echo "[+] Launching JOJO BACKUPER..."
-    if [[ ! -t 0 ]] && [[ -r /dev/tty ]]; then
-        exec </dev/tty
+    if [[ -r /dev/tty && -w /dev/tty ]]; then
+        if command -v script >/dev/null 2>&1; then
+            exec script -q -c "bash '${SCRIPT_DIR}/migrate.sh'" /dev/null < /dev/tty > /dev/tty 2>&1
+        fi
+        exec bash -c "exec </dev/tty >/dev/tty 2>/dev/tty; exec bash '${SCRIPT_DIR}/migrate.sh'"
     fi
-    exec bash "${SCRIPT_DIR}/migrate.sh"
+    echo "[!] Could not auto-launch. Run: sudo bash ${SCRIPT_DIR}/migrate.sh"
 fi

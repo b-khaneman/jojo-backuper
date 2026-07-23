@@ -136,12 +136,16 @@
 curl -fsSL https://raw.githubusercontent.com/b-khaneman/jojo-backuper/main/bootstrap.sh | sudo bash
 ```
 
-> همین یک خط، پروژه را در `/opt/jojo-backuper` نصب می‌کند و **بلافاصله منو را باز می‌کند**.
-
-بعداً فقط بزن:
+اگر منو خودکار باز نشد:
 
 ```bash
-sudo jojo
+sudo jojo-menu
+```
+
+یا:
+
+```bash
+sudo bash /opt/jojo-backuper/server-migration-manager/migrate.sh
 ```
 
 <details>
