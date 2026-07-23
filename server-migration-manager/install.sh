@@ -93,14 +93,13 @@ echo "     Author: @B_KHANEMAN"
 echo "     Start:  sudo jojo-menu"
 echo "         or: sudo bash ${SCRIPT_DIR}/migrate.sh"
 
+# --run only when caller has a real TTY (never hang on curl|bash)
 if [[ "$RUN_AFTER" == "yes" ]]; then
-    echo
-    echo "[+] Launching JOJO BACKUPER..."
-    if [[ -r /dev/tty && -w /dev/tty ]]; then
-        if command -v script >/dev/null 2>&1; then
-            exec script -q -c "bash '${SCRIPT_DIR}/migrate.sh'" /dev/null < /dev/tty > /dev/tty 2>&1
-        fi
-        exec bash -c "exec </dev/tty >/dev/tty 2>/dev/tty; exec bash '${SCRIPT_DIR}/migrate.sh'"
+    if [[ -t 0 && -t 1 ]]; then
+        echo
+        echo "[+] Launching JOJO BACKUPER..."
+        exec bash "${SCRIPT_DIR}/migrate.sh"
     fi
-    echo "[!] Could not auto-launch. Run: sudo bash ${SCRIPT_DIR}/migrate.sh"
+    echo
+    echo "[*] Installed. Open menu with: sudo jojo-menu"
 fi

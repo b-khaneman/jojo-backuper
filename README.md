@@ -134,19 +134,10 @@
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/b-khaneman/jojo-backuper/main/bootstrap.sh | sudo bash
-```
-
-اگر منو خودکار باز نشد:
-
-```bash
 sudo jojo-menu
 ```
 
-یا:
-
-```bash
-sudo bash /opt/jojo-backuper/server-migration-manager/migrate.sh
-```
+> نصب با دستور اول، باز کردن منو با دستور دوم (بعد از `curl|bash` لانچ خودکار غیرفعال است تا گیر نکند).
 
 <details>
 <summary><b>روش‌های دیگر</b></summary>
