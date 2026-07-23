@@ -100,8 +100,13 @@ connect_new_server() {
 
     if [[ "$AUTH_METHOD" == "password" ]]; then
         umask 077
-        echo "$SSH_PASSWORD" > "${PROJECT_LOG_DIR}/.ssh_password"
+        # printf avoids echo flag issues with passwords
+        printf '%s' "$SSH_PASSWORD" > "${PROJECT_LOG_DIR}/.ssh_password"
         chmod 600 "${PROJECT_LOG_DIR}/.ssh_password"
+        if [[ -z "$SSH_PASSWORD" ]]; then
+            msg_error "Password was empty — try again"
+            return 1
+        fi
     fi
 
     echo

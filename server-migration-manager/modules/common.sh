@@ -274,11 +274,30 @@ pause_enter() {
 # SSH helpers
 #-------------------------------------------------------------------------------
 build_ssh_opts() {
-    local opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30)
+    local opts=(
+        -o StrictHostKeyChecking=accept-new
+        -o UserKnownHostsFile="${HOME}/.ssh/known_hosts"
+        -o ConnectTimeout=20
+        -o ServerAliveInterval=30
+        -o ServerAliveCountMax=3
+        -o LogLevel=ERROR
+    )
     opts+=(-p "${REMOTE_PORT:-22}")
-    if [[ "${AUTH_METHOD:-key}" == "key" && -n "${SSH_KEY:-}" ]]; then
-        opts+=(-i "$SSH_KEY" -o IdentitiesOnly=yes)
+
+    if [[ "${AUTH_METHOD:-key}" == "password" ]]; then
+        # Prevent local keys/agent from exhausting auth attempts before password
+        opts+=(
+            -o PreferredAuthentications=password
+            -o PubkeyAuthentication=no
+            -o PasswordAuthentication=yes
+            -o KbdInteractiveAuthentication=no
+            -o NumberOfPasswordPrompts=1
+            -o IdentitiesOnly=yes
+        )
+    elif [[ -n "${SSH_KEY:-}" && -f "${SSH_KEY}" ]]; then
+        opts+=(-i "$SSH_KEY" -o IdentitiesOnly=yes -o PreferredAuthentications=publickey)
     fi
+
     printf '%s\n' "${opts[@]}"
 }
 
@@ -286,12 +305,17 @@ ssh_cmd() {
     local remote_cmd="$1"
     local opts
     mapfile -t opts < <(build_ssh_opts)
-    if [[ "${AUTH_METHOD:-key}" == "password" && -n "${SSH_PASSWORD:-}" ]]; then
-        if check_command sshpass; then
-            SSHPASS="$SSH_PASSWORD" sshpass -e ssh "${opts[@]}" "${REMOTE_USER}@${REMOTE_HOST}" "$remote_cmd"
-        else
-            die "sshpass is required for password authentication. Install: apt-get install -y sshpass"
+
+    if [[ "${AUTH_METHOD:-key}" == "password" ]]; then
+        if [[ -z "${SSH_PASSWORD:-}" ]]; then
+            msg_error "SSH password is empty — re-enter connection details"
+            return 1
         fi
+        if ! check_command sshpass; then
+            apt-get install -y sshpass >/dev/null 2>&1 || die "sshpass required: apt-get install -y sshpass"
+        fi
+        SSHPASS="$SSH_PASSWORD" sshpass -e ssh "${opts[@]}" \
+            "${REMOTE_USER}@${REMOTE_HOST}" "$remote_cmd"
     else
         ssh "${opts[@]}" "${REMOTE_USER}@${REMOTE_HOST}" "$remote_cmd"
     fi
@@ -300,31 +324,97 @@ ssh_cmd() {
 scp_cmd() {
     local src="$1"
     local dst="$2"
-    local opts
-    mapfile -t opts < <(build_ssh_opts)
-    # scp uses -P for port
-    local scp_opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -P "${REMOTE_PORT:-22}")
-    if [[ "${AUTH_METHOD:-key}" == "key" && -n "${SSH_KEY:-}" ]]; then
-        scp_opts+=(-i "$SSH_KEY" -o IdentitiesOnly=yes)
-    fi
-    if [[ "${AUTH_METHOD:-key}" == "password" && -n "${SSH_PASSWORD:-}" ]]; then
+    local scp_opts=(
+        -o StrictHostKeyChecking=accept-new
+        -o ConnectTimeout=20
+        -P "${REMOTE_PORT:-22}"
+    )
+    if [[ "${AUTH_METHOD:-key}" == "password" ]]; then
+        scp_opts+=(
+            -o PreferredAuthentications=password
+            -o PubkeyAuthentication=no
+            -o PasswordAuthentication=yes
+            -o IdentitiesOnly=yes
+        )
         SSHPASS="$SSH_PASSWORD" sshpass -e scp "${scp_opts[@]}" "$src" "$dst"
     else
+        if [[ -n "${SSH_KEY:-}" && -f "${SSH_KEY}" ]]; then
+            scp_opts+=(-i "$SSH_KEY" -o IdentitiesOnly=yes)
+        fi
         scp "${scp_opts[@]}" "$src" "$dst"
     fi
 }
 
+_probe_tcp_port() {
+    local host="$1" port="$2"
+    if check_command timeout && check_command bash; then
+        timeout 5 bash -c "echo >/dev/tcp/${host}/${port}" 2>/dev/null && return 0
+    fi
+    if check_command nc; then
+        nc -z -w 5 "$host" "$port" 2>/dev/null && return 0
+    fi
+    return 1
+}
+
 test_ssh_connection() {
     msg_step "Testing SSH connection to ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PORT}..."
-    if ssh_cmd "echo SMM_OK && uname -a && whoami" 2>/dev/null | grep -q "SMM_OK"; then
-        msg_ok "SSH connection successful"
-        log_ok "SSH connected to ${REMOTE_HOST}"
-        return 0
-    else
-        msg_error "SSH connection failed"
-        log_error "SSH connection failed to ${REMOTE_HOST}"
+    msg_dim "  Auth method: ${AUTH_METHOD:-key}"
+
+    if [[ -z "${REMOTE_HOST:-}" ]]; then
+        msg_error "REMOTE_HOST is empty"
         return 1
     fi
+
+    # Port reachability
+    if _probe_tcp_port "$REMOTE_HOST" "${REMOTE_PORT:-22}"; then
+        msg_ok "Port ${REMOTE_PORT} is reachable"
+    else
+        msg_warn "Cannot confirm port ${REMOTE_PORT} is open (firewall / wrong IP / SSH down?)"
+    fi
+
+    if [[ "${AUTH_METHOD:-key}" == "password" ]]; then
+        if ! check_command sshpass; then
+            msg_info "Installing sshpass..."
+            apt-get update -qq && apt-get install -y sshpass || die "Cannot install sshpass"
+        fi
+        if [[ -z "${SSH_PASSWORD:-}" ]]; then
+            msg_error "Password is empty"
+            return 1
+        fi
+        msg_dim "  Password length: ${#SSH_PASSWORD} chars"
+    fi
+
+    local out err tmp_err
+    tmp_err="$(mktemp /tmp/smm-ssh-err.XXXXXX 2>/dev/null || echo /tmp/smm-ssh-err.$$)"
+    out="$(ssh_cmd "echo SMM_OK; whoami; uname -n" 2>"$tmp_err")" || true
+    err="$(cat "$tmp_err" 2>/dev/null || true)"
+    rm -f "$tmp_err"
+
+    if echo "$out" | grep -q "SMM_OK"; then
+        msg_ok "SSH connection successful"
+        msg_dim "  $(echo "$out" | tr '\n' ' ')"
+        log_ok "SSH connected to ${REMOTE_HOST}"
+        return 0
+    fi
+
+    msg_error "SSH connection failed"
+    if [[ -n "$err" ]]; then
+        echo -e "${C_YELLOW}── SSH error detail ──${C_RESET}"
+        echo "$err" | sed 's/^/  /'
+        echo -e "${C_YELLOW}──────────────────────${C_RESET}"
+        log_error "SSH fail: $err"
+    else
+        msg_dim "  (no stderr captured)"
+    fi
+
+    echo
+    msg_info "Checklist on NEW server (${REMOTE_HOST}):"
+    msg_dim "  1) SSH running:          systemctl status ssh"
+    msg_dim "  2) Password auth ON:     grep PasswordAuthentication /etc/ssh/sshd_config"
+    msg_dim "  3) Root login allowed:   grep PermitRootLogin /etc/ssh/sshd_config"
+    msg_dim "  4) Firewall allows 22:   ufw status / iptables"
+    msg_dim "  5) Test manually:        ssh -p ${REMOTE_PORT} ${REMOTE_USER}@${REMOTE_HOST}"
+    return 1
 }
 
 #-------------------------------------------------------------------------------
