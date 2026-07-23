@@ -7,34 +7,63 @@
 #-------------------------------------------------------------------------------
 # Connect to new server (interactive)
 #-------------------------------------------------------------------------------
+# Read a line from the controlling terminal (safe after curl|bash)
+tty_read() {
+    local prompt="$1"
+    local __var="$2"
+    local __val=""
+    if [[ -r /dev/tty ]]; then
+        read -r -p "$prompt" __val < /dev/tty || true
+    else
+        read -r -p "$prompt" __val || true
+    fi
+    __val="$(printf '%s' "$__val" | tr -d '\r')"
+    printf -v "$__var" '%s' "$__val"
+}
+
+tty_read_silent() {
+    local prompt="$1"
+    local __var="$2"
+    local __val=""
+    if [[ -r /dev/tty ]]; then
+        read -r -s -p "$prompt" __val < /dev/tty || true
+        echo > /dev/tty
+    else
+        read -r -s -p "$prompt" __val || true
+        echo
+    fi
+    __val="$(printf '%s' "$__val" | tr -d '\r')"
+    printf -v "$__var" '%s' "$__val"
+}
+
 connect_new_server() {
     set_log_file "${PROJECT_LOG_DIR}/transfer.log"
     echo
     msg_info "Configure connection to the NEW server"
     echo
 
-    read -r -p "New server IP / hostname: " input_host
+    local input_host="" input_port="" input_user="" auth_choice="" input_key="" input_rpath=""
+    tty_read "New server IP / hostname: " input_host
     [[ -z "$input_host" ]] && { msg_error "Host is required"; return 1; }
     REMOTE_HOST="$input_host"
 
-    read -r -p "SSH Port [${REMOTE_PORT:-${SSH_PORT:-22}}]: " input_port
+    tty_read "SSH Port [${REMOTE_PORT:-${SSH_PORT:-22}}]: " input_port
     REMOTE_PORT="${input_port:-${REMOTE_PORT:-${SSH_PORT:-22}}}"
     SSH_PORT="$REMOTE_PORT"
 
-    read -r -p "Username [${REMOTE_USER:-root}]: " input_user
+    tty_read "Username [${REMOTE_USER:-root}]: " input_user
     REMOTE_USER="${input_user:-${REMOTE_USER:-root}}"
 
     echo
     echo "Authentication method:"
     echo "  1) Private key"
     echo "  2) Password"
-    read -r -p "Choice [1]: " auth_choice
+    tty_read "Choice [1]: " auth_choice
     auth_choice="${auth_choice:-1}"
 
     if [[ "$auth_choice" == "2" ]]; then
         AUTH_METHOD="password"
-        read -r -s -p "Password: " SSH_PASSWORD
-        echo
+        tty_read_silent "Password: " SSH_PASSWORD
         SSH_KEY=""
         if ! check_command sshpass; then
             msg_info "Installing sshpass..."
@@ -45,7 +74,7 @@ connect_new_server() {
         SSH_PASSWORD=""
         local default_key="${HOME}/.ssh/id_rsa"
         [[ -f "${HOME}/.ssh/id_ed25519" ]] && default_key="${HOME}/.ssh/id_ed25519"
-        read -r -p "Private key path [${default_key}]: " input_key
+        tty_read "Private key path [${default_key}]: " input_key
         SSH_KEY="${input_key:-$default_key}"
         if [[ ! -f "$SSH_KEY" ]]; then
             msg_warn "Key file not found: $SSH_KEY"
@@ -53,7 +82,7 @@ connect_new_server() {
         fi
     fi
 
-    read -r -p "Remote backup path [${REMOTE_PATH:-/backup}]: " input_rpath
+    tty_read "Remote backup path [${REMOTE_PATH:-/backup}]: " input_rpath
     REMOTE_PATH="${input_rpath:-${REMOTE_PATH:-/backup}}"
 
     # Persist to a runtime state file (not overwriting secrets into config.conf by default)
@@ -368,7 +397,12 @@ sudo_restore_on_new_server() {
     declare -f create_restore_point_remote &>/dev/null && create_restore_point_remote
 
     local reboot_flag="${REBOOT_AFTER_RESTORE:-yes}"
-    read -r -p "Reboot new server after restore? [Y/n]: " rb
+    local rb=""
+    if declare -f tty_read &>/dev/null; then
+        tty_read "Reboot new server after restore? [Y/n]: " rb
+    else
+        read -r -p "Reboot new server after restore? [Y/n]: " rb < /dev/tty || true
+    fi
     case "${rb:-Y}" in
         n|N|no|NO) reboot_flag="no" ;;
         *) reboot_flag="yes" ;;

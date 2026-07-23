@@ -248,7 +248,12 @@ confirm_action() {
     echo -e "${C_YELLOW}${C_BOLD}WARNING:${C_RESET}"
     echo -e "${C_YELLOW}$prompt${C_RESET}"
     echo
-    read -r -p "Type 'YES' to continue: " answer
+    local answer=""
+    if [[ -r /dev/tty ]]; then
+        read -r -p "Type 'YES' to continue: " answer < /dev/tty || true
+    else
+        read -r -p "Type 'YES' to continue: " answer || true
+    fi
     if [[ "$answer" != "YES" ]]; then
         msg_warn "Aborted by user."
         return 1
@@ -258,7 +263,11 @@ confirm_action() {
 
 pause_enter() {
     echo
-    read -r -p "Press ENTER to continue..." _
+    if [[ -r /dev/tty ]]; then
+        read -r -p "Press ENTER to continue..." _ < /dev/tty || true
+    else
+        read -r -p "Press ENTER to continue..." _ || true
+    fi
 }
 
 #-------------------------------------------------------------------------------

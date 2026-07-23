@@ -91,15 +91,41 @@ run_command() {
     esac
 }
 
+# Ensure interactive TTY (fixes empty menu input after curl|bash install)
+ensure_tty() {
+    if [[ ! -t 0 ]] && [[ -r /dev/tty ]]; then
+        exec </dev/tty
+    fi
+    if [[ ! -t 1 ]] && [[ -w /dev/tty ]]; then
+        exec >/dev/tty
+    fi
+    if [[ ! -t 2 ]] && [[ -w /dev/tty ]]; then
+        exec 2>/dev/tty
+    fi
+}
+
 main_menu() {
     require_root
+    ensure_tty
     setup_signal_traps
     check_dependencies
 
     while true; do
         print_menu
-        read -r -p "Select option [1-17]: " choice
+        # Always read from the controlling terminal
+        if [[ -r /dev/tty ]]; then
+            read -r -p "Select option [1-17]: " choice < /dev/tty || choice=""
+        else
+            read -r -p "Select option [1-17]: " choice || choice=""
+        fi
+        # Trim whitespace / CR
+        choice="$(echo "$choice" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         echo
+        if [[ -z "$choice" ]]; then
+            msg_warn "No input received — type a number (1-17) and press Enter"
+            sleep 1
+            continue
+        fi
         case "$choice" in
             1)  deploy_to_new_server; pause_enter ;;
             2)  sudo_restore_on_new_server; pause_enter ;;
@@ -120,19 +146,23 @@ main_menu() {
             14)
                 echo "  a) systemd timer (recommended)"
                 echo "  b) cron"
-                read -r -p "Choice [a]: " sch
+                if [[ -r /dev/tty ]]; then
+                    read -r -p "Choice [a]: " sch < /dev/tty
+                else
+                    read -r -p "Choice [a]: " sch
+                fi
                 if [[ "${sch:-a}" == "b" ]]; then schedule_backup_cron; else install_systemd_timer; fi
                 pause_enter
                 ;;
             15) test_notifications; pause_enter ;;
-            16) update_from_github ;;  # exec's into new migrate.sh
+            16) update_from_github ;;
             17)
                 echo
                 msg_ok "Goodbye."
                 exit 0
                 ;;
             *)
-                msg_warn "Invalid option: $choice"
+                msg_warn "Invalid option: '$choice' — enter 1 to 17"
                 sleep 1
                 ;;
         esac

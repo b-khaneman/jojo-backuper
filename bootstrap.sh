@@ -78,4 +78,9 @@ if [[ "${SKIP_RUN}" == "yes" || "${JOJO_SKIP_RUN:-}" == "yes" ]]; then
 fi
 
 echo "[+] Launching JOJO BACKUPER..."
+# Critical: when installed via `curl | sudo bash`, stdin is the pipe (EOF).
+# Reattach to the real terminal so the menu can accept keyboard input.
+if [[ ! -t 0 ]] && [[ -r /dev/tty ]]; then
+    exec </dev/tty
+fi
 exec bash "${APP_DIR}/migrate.sh"

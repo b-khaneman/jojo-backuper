@@ -132,5 +132,8 @@ update_from_github() {
     echo
     msg_info "Restarting JOJO BACKUPER to load new code..."
     sleep 1
+    if [[ ! -t 0 ]] && [[ -r /dev/tty ]]; then
+        exec </dev/tty
+    fi
     exec bash "${app_dir}/migrate.sh"
 }

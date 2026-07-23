@@ -74,5 +74,8 @@ echo "         or: sudo bash ${SCRIPT_DIR}/migrate.sh"
 if [[ "$RUN_AFTER" == "yes" ]]; then
     echo
     echo "[+] Launching JOJO BACKUPER..."
+    if [[ ! -t 0 ]] && [[ -r /dev/tty ]]; then
+        exec </dev/tty
+    fi
     exec bash "${SCRIPT_DIR}/migrate.sh"
 fi
