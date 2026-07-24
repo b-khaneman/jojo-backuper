@@ -510,30 +510,27 @@ print_banner() {
 
 print_menu() {
     print_banner
-    echo -e "  ${C_GREEN}${C_BOLD}─── Quick Migration ───${C_RESET}"
+    echo -e "  ${C_GREEN}${C_BOLD}─── Quick / Core ───${C_RESET}"
     echo -e "  ${C_WHITE} 1)${C_RESET} ${C_GREEN}Deploy to New Server${C_RESET}  ${C_DIM}(ask details + upload backups + install scripts)${C_RESET}"
     echo -e "  ${C_WHITE} 2)${C_RESET} ${C_YELLOW}Restore Backup (sudo)${C_RESET} ${C_DIM}(overwrite new server safely)${C_RESET}"
     echo -e "  ${C_WHITE} 3)${C_RESET} ${C_MAGENTA}انتقال پنل پاسارگارد${C_RESET} / ${C_MAGENTA}Migrate PasarGuard Panel${C_RESET}"
     echo -e "      ${C_DIM}(certs + nodes DB + /opt + /var/lib + MariaDB + compose)${C_RESET}"
-    echo
-    echo -e "  ${C_DIM}─── Backup & Tools ───${C_RESET}"
     echo -e "  ${C_WHITE} 4)${C_RESET} Create Full Server Backup"
+    echo
+    echo -e "  ${C_CYAN}${C_BOLD}─── Connection & Transfer ───${C_RESET}"
     echo -e "  ${C_WHITE} 5)${C_RESET} Connect To New Server"
     echo -e "  ${C_WHITE} 6)${C_RESET} Upload Backup Only"
+    echo
+    echo -e "  ${C_DIM}─── Tools ───${C_RESET}"
     echo -e "  ${C_WHITE} 7)${C_RESET} Verify Backup"
     echo -e "  ${C_WHITE} 8)${C_RESET} Show Backup Information"
-    echo -e "  ${C_WHITE} 9)${C_RESET} Cleanup Backup Files"
-    echo -e "  ${C_WHITE}10)${C_RESET} Pre-flight Check"
-    echo -e "  ${C_WHITE}11)${C_RESET} Estimate Backup Size"
-    echo -e "  ${C_WHITE}12)${C_RESET} Full Migration Wizard"
-    echo -e "  ${C_WHITE}13)${C_RESET} Post-Migration Health Check"
-    echo -e "  ${C_WHITE}14)${C_RESET} Generate Migration Report"
-    echo -e "  ${C_WHITE}15)${C_RESET} Schedule Weekly Backup"
-    echo -e "  ${C_WHITE}16)${C_RESET} Test Notifications"
+    echo -e "  ${C_WHITE} 9)${C_RESET} Pre-flight Check"
+    echo -e "  ${C_WHITE}10)${C_RESET} Post-Migration Health Check"
+    echo -e "  ${C_WHITE}11)${C_RESET} ${C_MAGENTA}Update from GitHub${C_RESET}  ${C_DIM}(auto-pull latest JOJO BACKUPER)${C_RESET}"
+    echo -e "  ${C_WHITE}12)${C_RESET} Exit"
     echo
-    echo -e "  ${C_MAGENTA}${C_BOLD}─── System ───${C_RESET}"
-    echo -e "  ${C_WHITE}17)${C_RESET} ${C_MAGENTA}Update from GitHub${C_RESET}  ${C_DIM}(auto-pull latest JOJO BACKUPER)${C_RESET}"
-    echo -e "  ${C_WHITE}18)${C_RESET} Exit"
+    echo -e "  ${C_YELLOW}${C_BOLD}─── More ───${C_RESET}"
+    echo -e "  ${C_WHITE}13)${C_RESET} Advanced tools  ${C_DIM}(estimate, wizard, cleanup, report, schedule, notify)${C_RESET}"
     echo
     echo -e "${C_DIM}-----------------------------------------${C_RESET}"
     if [[ -n "${REMOTE_HOST:-}" ]]; then
@@ -555,6 +552,19 @@ print_menu() {
     [[ "${ENCRYPT_BACKUP:-no}" == "yes" ]] && echo -e "  Crypto: ${C_YELLOW}ON (${ENCRYPT_METHOD})${C_RESET}"
     [[ "${NOTIFY_ENABLED:-no}" == "yes" ]] && echo -e "  Notify: ${C_GREEN}ON${C_RESET}"
     echo -e "${C_DIM}-----------------------------------------${C_RESET}"
+    echo
+}
+
+print_advanced_menu() {
+    echo
+    echo -e "  ${C_YELLOW}${C_BOLD}─── Advanced tools ───${C_RESET}"
+    echo -e "  ${C_WHITE} 1)${C_RESET} Estimate Backup Size"
+    echo -e "  ${C_WHITE} 2)${C_RESET} Full Migration Wizard"
+    echo -e "  ${C_WHITE} 3)${C_RESET} Cleanup Backup Files"
+    echo -e "  ${C_WHITE} 4)${C_RESET} Generate Migration Report"
+    echo -e "  ${C_WHITE} 5)${C_RESET} Schedule Weekly Backup"
+    echo -e "  ${C_WHITE} 6)${C_RESET} Test Notifications"
+    echo -e "  ${C_WHITE} 0)${C_RESET} Back to main menu"
     echo
 }
 

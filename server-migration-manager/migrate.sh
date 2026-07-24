@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 #
-#   JOJO BACKUPER v1.2
+#   JOJO BACKUPER v1.3.2
 #   by @B_KHANEMAN
 #   Server Migration Manager — Enterprise VPS Cloning & Migration
 #
@@ -65,16 +65,21 @@ usage() {
     cat <<EOF
 Usage: sudo $0 [command]
 
-Quick:
+Core:
   deploy              Deploy backups + toolkit to new server
   sudo-restore        Restore on new server (sudo)
   pasarguard|pg-panel Migrate PasarGuard panel only (end-to-end)
-  update              Update JOJO BACKUPER from GitHub
   backup              Create full server backup
+  update              Update JOJO BACKUPER from GitHub
 
-Other:
-  connect | upload | verify | info | cleanup
-  preflight | estimate | wizard | postcheck | report | schedule | notify-test
+Connection & transfer:
+  connect | upload
+
+Tools:
+  verify | info | preflight | postcheck
+
+Advanced:
+  estimate | wizard | cleanup | report | schedule | notify-test
 
 One-line install + run (from any Ubuntu server):
   curl -fsSL https://raw.githubusercontent.com/b-khaneman/jojo-backuper/main/bootstrap.sh | sudo bash
@@ -124,6 +129,42 @@ ensure_tty() {
     fi
 }
 
+advanced_menu() {
+    while true; do
+        print_advanced_menu
+        if [[ -r /dev/tty ]]; then
+            read -r -p "Advanced [0-6]: " adv < /dev/tty || adv=""
+        else
+            read -r -p "Advanced [0-6]: " adv || adv=""
+        fi
+        adv="$(echo "$adv" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+        echo
+        case "$adv" in
+            1) estimate_backup_size; pause_enter ;;
+            2) run_full_migration_wizard; pause_enter ;;
+            3) cleanup_backups; pause_enter ;;
+            4) generate_migration_report; pause_enter ;;
+            5)
+                echo "  a) systemd timer (recommended)"
+                echo "  b) cron"
+                if [[ -r /dev/tty ]]; then
+                    read -r -p "Choice [a]: " sch < /dev/tty
+                else
+                    read -r -p "Choice [a]: " sch
+                fi
+                if [[ "${sch:-a}" == "b" ]]; then schedule_backup_cron; else install_systemd_timer; fi
+                pause_enter
+                ;;
+            6) test_notifications; pause_enter ;;
+            0|"") return 0 ;;
+            *)
+                msg_warn "Invalid option: '$adv' — enter 0 to 6"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 main_menu() {
     require_root
     ensure_tty
@@ -134,15 +175,15 @@ main_menu() {
         print_menu
         # Always read from the controlling terminal
         if [[ -r /dev/tty ]]; then
-            read -r -p "Select option [1-18]: " choice < /dev/tty || choice=""
+            read -r -p "Select option [1-13]: " choice < /dev/tty || choice=""
         else
-            read -r -p "Select option [1-18]: " choice || choice=""
+            read -r -p "Select option [1-13]: " choice || choice=""
         fi
         # Trim whitespace / CR
         choice="$(echo "$choice" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         echo
         if [[ -z "$choice" ]]; then
-            msg_warn "No input received — type a number (1-18) and press Enter"
+            msg_warn "No input received — type a number (1-13) and press Enter"
             sleep 1
             continue
         fi
@@ -155,35 +196,20 @@ main_menu() {
             6)  upload_backup; pause_enter ;;
             7)  verify_backup; pause_enter ;;
             8)  show_backup_info; pause_enter ;;
-            9)  cleanup_backups; pause_enter ;;
-            10) preflight_check; pause_enter ;;
-            11) estimate_backup_size; pause_enter ;;
-            12) run_full_migration_wizard; pause_enter ;;
-            13)
+            9)  preflight_check; pause_enter ;;
+            10)
                 if [[ -n "${REMOTE_HOST:-}" ]]; then postcheck_remote; else postcheck_local; fi
                 pause_enter
                 ;;
-            14) generate_migration_report; pause_enter ;;
-            15)
-                echo "  a) systemd timer (recommended)"
-                echo "  b) cron"
-                if [[ -r /dev/tty ]]; then
-                    read -r -p "Choice [a]: " sch < /dev/tty
-                else
-                    read -r -p "Choice [a]: " sch
-                fi
-                if [[ "${sch:-a}" == "b" ]]; then schedule_backup_cron; else install_systemd_timer; fi
-                pause_enter
-                ;;
-            16) test_notifications; pause_enter ;;
-            17) update_from_github ;;
-            18)
+            11) update_from_github ;;
+            12)
                 echo
                 msg_ok "Goodbye."
                 exit 0
                 ;;
+            13) advanced_menu ;;
             *)
-                msg_warn "Invalid option: '$choice' — enter 1 to 18"
+                msg_warn "Invalid option: '$choice' — enter 1 to 13"
                 sleep 1
                 ;;
         esac
