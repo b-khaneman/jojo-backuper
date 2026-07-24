@@ -273,6 +273,33 @@ pause_enter() {
 #-------------------------------------------------------------------------------
 # SSH helpers
 #-------------------------------------------------------------------------------
+# Remove stale host keys so reinstalled VPS at same IP/hostname can reconnect.
+# accept-new alone does NOT replace a changed key — must forget first.
+ssh_forget_host() {
+    local host="${1:-${REMOTE_HOST:-}}"
+    local port="${2:-${REMOTE_PORT:-${SSH_PORT:-22}}}"
+    [[ -n "$host" ]] || return 0
+
+    # Bare hostname/IP (default port 22 entries)
+    ssh-keygen -R "$host" 2>/dev/null || true
+    # Bracketed [host]:port form used by OpenSSH for non-22 (and sometimes 22)
+    ssh-keygen -R "[${host}]:${port}" 2>/dev/null || true
+    if [[ "$port" != "22" ]]; then
+        # Also clear default-port entry in case prior connect used 22
+        ssh-keygen -R "[${host}]:22" 2>/dev/null || true
+    fi
+
+    # Dedicated known_hosts (if present) — keep in sync with system file clears
+    local dedicated="${PROJECT_LOG_DIR:-}/.ssh_known_hosts"
+    if [[ -n "${PROJECT_LOG_DIR:-}" && -f "$dedicated" ]]; then
+        ssh-keygen -R "$host" -f "$dedicated" 2>/dev/null || true
+        ssh-keygen -R "[${host}]:${port}" -f "$dedicated" 2>/dev/null || true
+        [[ "$port" != "22" ]] && ssh-keygen -R "[${host}]:22" -f "$dedicated" 2>/dev/null || true
+    fi
+
+    return 0
+}
+
 build_ssh_opts() {
     local opts=(
         -o StrictHostKeyChecking=accept-new
@@ -329,8 +356,10 @@ ssh_cmd() {
 scp_cmd() {
     local src="$1"
     local dst="$2"
+    ssh_forget_host "${REMOTE_HOST:-}" "${REMOTE_PORT:-22}"
     local scp_opts=(
         -o StrictHostKeyChecking=accept-new
+        -o UserKnownHostsFile="${HOME}/.ssh/known_hosts"
         -o ConnectTimeout=20
         -P "${REMOTE_PORT:-22}"
     )
@@ -373,6 +402,9 @@ test_ssh_connection() {
         msg_error "REMOTE_HOST is empty"
         return 1
     fi
+
+    # Drop stale known_hosts entries (reinstalled VPS / changed host key)
+    ssh_forget_host "$REMOTE_HOST" "${REMOTE_PORT:-22}"
 
     # Port reachability
     if _probe_tcp_port "$REMOTE_HOST" "${REMOTE_PORT:-22}"; then

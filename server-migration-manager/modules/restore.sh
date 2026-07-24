@@ -51,6 +51,9 @@ connect_new_server() {
     REMOTE_PORT="${input_port:-${REMOTE_PORT:-${SSH_PORT:-22}}}"
     SSH_PORT="$REMOTE_PORT"
 
+    # Clear stale host keys before first connect (reinstalled VPS at same IP)
+    ssh_forget_host "$REMOTE_HOST" "$REMOTE_PORT"
+
     tty_read "Username [${REMOTE_USER:-root}]: " input_user
     REMOTE_USER="${input_user:-${REMOTE_USER:-root}}"
 
@@ -187,7 +190,13 @@ remote_sudo_script() {
 
     ssh_cmd "mkdir -p /tmp" || { rm -f "$local_tmp"; return 1; }
 
-    local scp_opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -P "${REMOTE_PORT:-22}")
+    ssh_forget_host "${REMOTE_HOST:-}" "${REMOTE_PORT:-22}"
+    local scp_opts=(
+        -o StrictHostKeyChecking=accept-new
+        -o UserKnownHostsFile="${HOME}/.ssh/known_hosts"
+        -o ConnectTimeout=15
+        -P "${REMOTE_PORT:-22}"
+    )
     if [[ "${AUTH_METHOD:-key}" == "key" && -n "${SSH_KEY:-}" ]]; then
         scp_opts+=(-i "$SSH_KEY" -o IdentitiesOnly=yes)
     fi
@@ -217,6 +226,7 @@ remote_sudo_script() {
 }
 
 _build_ssh_rsh() {
+    ssh_forget_host "${REMOTE_HOST:-}" "${REMOTE_PORT:-22}"
     local opts
     mapfile -t opts < <(build_ssh_opts)
     if [[ "${AUTH_METHOD:-key}" == "password" && -n "${SSH_PASSWORD:-}" ]]; then
@@ -490,19 +500,15 @@ upload_backup() {
     msg_info "Target: ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}/"
     log_info "Upload start: $archive → ${REMOTE_HOST}:${REMOTE_PATH}"
 
+    # Clear stale host keys before scp/rsync upload paths
+    ssh_forget_host "$REMOTE_HOST" "${REMOTE_PORT:-22}"
+
     # Ensure remote path exists
     ssh_cmd "mkdir -p '$REMOTE_PATH' && mkdir -p /var/log/server-migration" || die "Cannot create remote path"
 
     # Build rsync SSH command
-    local ssh_rsh
-    local opts
-    mapfile -t opts < <(build_ssh_opts)
-    if [[ "${AUTH_METHOD:-key}" == "password" && -n "${SSH_PASSWORD:-}" ]]; then
-        export SSHPASS="$SSH_PASSWORD"
-        ssh_rsh="sshpass -e ssh ${opts[*]}"
-    else
-        ssh_rsh="ssh ${opts[*]}"
-    fi
+    _build_ssh_rsh
+    local ssh_rsh="$SSH_RSH"
 
     loading_anim "Starting transfer (rsync resume-capable)" 1
 
