@@ -81,6 +81,3 @@ restore_services() {
     msg_ok "Services restore completed"
     log_ok "Services restore completed"
 }
-    msg_ok "Services restore completed"
-    log_ok "Services restore completed"
-}
