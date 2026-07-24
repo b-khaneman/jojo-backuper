@@ -49,8 +49,10 @@ restore_firewall() {
     local src="${1:-}"
     [[ -z "$src" || ! -d "$src" ]] && { msg_warn "No firewall backup found"; return 0; }
 
-    if [[ "${RESTORE_FIREWALL:-yes}" != "yes" ]]; then
-        msg_dim "Firewall restore skipped (config)"
+    if [[ "${RESTORE_FIREWALL:-no}" != "yes" ]]; then
+        msg_dim "Firewall restore skipped (safe default — prevents SSH lockout)"
+        mkdir -p /root/smm-firewall-from-old
+        cp -a "$src/." /root/smm-firewall-from-old/ 2>/dev/null || true
         return 0
     fi
 

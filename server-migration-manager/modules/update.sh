@@ -99,10 +99,18 @@ update_from_github() {
 
     after="$(git -C "$repo_root" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
-    # Restore local runtime config / secrets
+    # Restore local runtime config / secrets, then force safe restore keys
     if [[ -f "$cfg_bak" ]]; then
         cp -a "$cfg_bak" "${app_dir}/config.conf"
         msg_dim "Preserved local config.conf"
+        if declare -f merge_safe_config_keys &>/dev/null; then
+            merge_safe_config_keys "${app_dir}/config.conf"
+            msg_ok "Merged safe restore guards into config.conf"
+        else
+            # Fallback if common.sh not sourced yet
+            source "${app_dir}/modules/common.sh" 2>/dev/null || true
+            declare -f merge_safe_config_keys &>/dev/null && merge_safe_config_keys "${app_dir}/config.conf"
+        fi
     fi
     mkdir -p "${app_dir}/logs" "${app_dir}/backups"
     [[ -f "$state_bak" ]] && cp -a "$state_bak" "${app_dir}/logs/.remote_state"

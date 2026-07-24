@@ -557,7 +557,7 @@ print_menu() {
 }
 
 #-------------------------------------------------------------------------------
-# Cloud-init cleanup (after restore — avoid regenerating wrong network)
+# Cloud-init cleanup (after restore — keep datasources)
 #-------------------------------------------------------------------------------
 clean_cloud_init() {
     if [[ "${CLEAN_CLOUD_INIT:-yes}" != "yes" ]]; then
@@ -577,4 +577,64 @@ network:
 EOF
     fi
     msg_ok "cloud-init cleaned"
+}
+
+#-------------------------------------------------------------------------------
+# Hard safety guards — prevent brick / SSH lockout / CPU death
+# Old config.conf from previous installs may still have dangerous =yes values.
+#-------------------------------------------------------------------------------
+enforce_safe_restore_guards() {
+    if [[ "${SAFE_RESTORE_GUARDS:-yes}" != "yes" ]]; then
+        msg_warn "SAFE_RESTORE_GUARDS=no — brick/lockout protections DISABLED"
+        return 0
+    fi
+    RESTORE_BOOT="no"
+    RESTORE_USR="no"
+    RESTORE_FSTAB="no"
+    KEEP_TARGET_NETWORK="yes"
+    RESTORE_NETWORK="no"
+    RESTORE_FIREWALL="no"
+    RESTORE_SECURITY="no"
+    RESTORE_SSHD_CONFIG="no"
+    RESTORE_TUNNELS="no"
+    RESTORE_DOCKER_AUTO_START="no"
+    RESTORE_DOCKER_IMAGES="no"
+    RESTORE_MAIL="no"
+    # Reboot only if caller explicitly set do_reboot path; default config stays no
+    if [[ "${REBOOT_AFTER_RESTORE:-no}" == "yes" ]]; then
+        msg_warn "REBOOT_AFTER_RESTORE was yes — forcing no (reboot manually after SSH check)"
+        REBOOT_AFTER_RESTORE="no"
+    fi
+    msg_ok "Safe restore guards ON (boot/usr/fstab/net/fw/sshd/docker-start locked)"
+}
+
+# Merge critical safe keys into an existing config.conf (used by update)
+merge_safe_config_keys() {
+    local cfg="${1:-}"
+    [[ -f "$cfg" ]] || return 0
+    local tmp="${cfg}.safe-merge.$$"
+    cp -a "$cfg" "$tmp"
+    _set_cfg_key() {
+        local key="$1" val="$2" file="$3"
+        if grep -qE "^[[:space:]]*${key}=" "$file" 2>/dev/null; then
+            sed -i "s|^[[:space:]]*${key}=.*|${key}=\"${val}\"|" "$file"
+        else
+            printf '\n%s="%s"\n' "$key" "$val" >> "$file"
+        fi
+    }
+    _set_cfg_key REBOOT_AFTER_RESTORE no "$tmp"
+    _set_cfg_key RESTORE_BOOT no "$tmp"
+    _set_cfg_key RESTORE_USR no "$tmp"
+    _set_cfg_key RESTORE_FSTAB no "$tmp"
+    _set_cfg_key KEEP_TARGET_NETWORK yes "$tmp"
+    _set_cfg_key RESTORE_NETWORK no "$tmp"
+    _set_cfg_key RESTORE_FIREWALL no "$tmp"
+    _set_cfg_key RESTORE_SECURITY no "$tmp"
+    _set_cfg_key RESTORE_SSHD_CONFIG no "$tmp"
+    _set_cfg_key RESTORE_TUNNELS no "$tmp"
+    _set_cfg_key RESTORE_DOCKER_AUTO_START no "$tmp"
+    _set_cfg_key RESTORE_DOCKER_IMAGES no "$tmp"
+    _set_cfg_key RESTORE_MAIL no "$tmp"
+    _set_cfg_key SAFE_RESTORE_GUARDS yes "$tmp"
+    mv -f "$tmp" "$cfg"
 }

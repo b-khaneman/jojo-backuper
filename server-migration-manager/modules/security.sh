@@ -68,17 +68,34 @@ backup_security() {
 restore_security() {
     local src="${1:-}"
     [[ -z "$src" || ! -d "$src" ]] && { msg_warn "No security backup found"; return 0; }
-    [[ "${RESTORE_SECURITY:-yes}" == "yes" ]] || { msg_dim "Security restore skipped"; return 0; }
+    [[ "${RESTORE_SECURITY:-no}" == "yes" ]] || { msg_dim "Security restore skipped (safe default)"; return 0; }
 
     msg_step "Restoring security configuration..."
 
-    # SSH config (careful with host keys)
+    # SSH config — HIGH RISK: old Port/PermitRootLogin/PasswordAuthentication can lock you out
+    if [[ "${RESTORE_SSHD_CONFIG:-no}" == "yes" ]]; then
+        if [[ -d "$src/ssh/ssh" ]] || [[ -d "$src/ssh" ]]; then
+            local sshsrc="$src/ssh"
+            [[ -d "$src/ssh/ssh" ]] && sshsrc="$src/ssh/ssh"
+            mkdir -p /root/smm-ssh-from-old
+            cp -a "$sshsrc"/sshd_config /root/smm-ssh-from-old/ 2>/dev/null || true
+            cp -a "$sshsrc"/sshd_config "$sshsrc"/ssh_config /etc/ssh/ 2>/dev/null || true
+            cp -a "$sshsrc"/sshd_config.d /etc/ssh/ 2>/dev/null || true
+            msg_warn "  sshd_config applied from old server (RESTORE_SSHD_CONFIG=yes)"
+        fi
+    else
+        msg_warn "  Keeping NEW server sshd_config (RESTORE_SSHD_CONFIG=no) — prevents SSH lockout"
+        if [[ -d "$src/ssh/ssh" ]] || [[ -d "$src/ssh" ]]; then
+            local sshsrc="$src/ssh"
+            [[ -d "$src/ssh/ssh" ]] && sshsrc="$src/ssh/ssh"
+            mkdir -p /root/smm-ssh-from-old
+            cp -a "$sshsrc"/sshd_config "$sshsrc"/sshd_config.d /root/smm-ssh-from-old/ 2>/dev/null || true
+        fi
+    fi
+
     if [[ -d "$src/ssh/ssh" ]] || [[ -d "$src/ssh" ]]; then
         local sshsrc="$src/ssh"
         [[ -d "$src/ssh/ssh" ]] && sshsrc="$src/ssh/ssh"
-        # configs
-        cp -a "$sshsrc"/sshd_config "$sshsrc"/ssh_config /etc/ssh/ 2>/dev/null || true
-        cp -a "$sshsrc"/sshd_config.d /etc/ssh/ 2>/dev/null || true
         if [[ "${PRESERVE_NEW_SSH_HOST_KEYS:-yes}" != "yes" ]]; then
             cp -a "$sshsrc"/ssh_host_* /etc/ssh/ 2>/dev/null || true
             msg_info "  SSH host keys cloned from old server"
@@ -87,7 +104,7 @@ restore_security() {
         fi
     fi
 
-    # User .ssh
+    # User .ssh (authorized_keys) — usually safe and useful
     if [[ -d "$src/user-ssh" ]]; then
         local u
         for u in "$src/user-ssh"/*; do
@@ -104,27 +121,17 @@ restore_security() {
         msg_ok "  User SSH keys restored"
     fi
 
-    # fail2ban
+    # fail2ban — copy only, do not restart during restore (can ban your IP mid-session)
     if [[ -d "$src/fail2ban" ]]; then
-        apt-get install -y fail2ban 2>/dev/null || true
-        cp -a "$src/fail2ban/." /etc/fail2ban/ 2>/dev/null || true
-        systemctl enable fail2ban 2>/dev/null || true
-        systemctl restart fail2ban 2>/dev/null || true
-        msg_ok "  fail2ban restored"
+        mkdir -p /root/smm-fail2ban-from-old
+        cp -a "$src/fail2ban/." /root/smm-fail2ban-from-old/ 2>/dev/null || true
+        msg_dim "  fail2ban saved to /root/smm-fail2ban-from-old (not applied live)"
     fi
 
-    # sudoers
-    [[ -f "$src/sudoers" ]] && cp -a "$src/sudoers" /etc/sudoers && chmod 440 /etc/sudoers
-    [[ -d "$src/sudoers.d" ]] && cp -a "$src/sudoers.d/." /etc/sudoers.d/ 2>/dev/null || true
-    [[ -d "$src/pam.d" ]] && cp -a "$src/pam.d/." /etc/pam.d/ 2>/dev/null || true
+    # sudoers / pam — high risk; stage only
+    [[ -f "$src/sudoers" ]] && cp -a "$src/sudoers" /root/smm-sudoers.from-old 2>/dev/null || true
+    [[ -d "$src/sudoers.d" ]] && cp -a "$src/sudoers.d" /root/smm-sudoers.d.from-old 2>/dev/null || true
 
-    # AppArmor profiles
-    if [[ -d "$src/apparmor/apparmor.d" ]]; then
-        cp -a "$src/apparmor/apparmor.d/." /etc/apparmor.d/ 2>/dev/null || true
-        systemctl reload apparmor 2>/dev/null || true
-    fi
-
-    systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
-    msg_ok "Security restore completed"
+    msg_ok "Security restore completed (non-locking mode)"
     log_ok "Security restore completed"
 }

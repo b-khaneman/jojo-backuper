@@ -687,11 +687,20 @@ verify_migration_remote() {
 restore_from_archive() {
     local archive="$1"
     local auto_yes="${2:-no}"
-    local do_reboot="${3:-yes}"
+    local do_reboot="${3:-no}"
 
     set_log_file "${LOG_DIR:-/var/log/server-migration}/restore.log"
     mkdir -p "${LOG_DIR:-/var/log/server-migration}"
     require_root
+
+    # Hard guards — ignore old dangerous config.conf values
+    if declare -f enforce_safe_restore_guards &>/dev/null; then
+        enforce_safe_restore_guards
+    fi
+    # Interactive/agent --reboot=yes still honored via do_reboot arg (not config)
+    if [[ "$do_reboot" == "yes" ]]; then
+        msg_warn "Reboot requested after restore — will only reboot if SSH identity/network were preserved"
+    fi
 
     [[ -f "$archive" ]] || die "Archive not found: $archive"
 
@@ -834,10 +843,17 @@ restore_from_archive() {
             else
                 "${run_soft[@]}" rsync -aAX \
                     --exclude='**/docker/overlay2/**' \
-                    --exclude='**/containerd/**' \
                     --exclude='**/docker/image/**' \
+                    --exclude='**/containerd/**' \
+                    --exclude='**/docker/buildkit/**' \
+                    --exclude='**/journal/**' \
+                    --exclude='**/log/journal/**' \
                     "$work/extract/$tree/" "/$tree/" 2>>"${LOG_DIR}/restore.log" || \
-                "${run_soft[@]}" rsync -a "$work/extract/$tree/" "/$tree/" 2>>"${LOG_DIR}/restore.log" || true
+                "${run_soft[@]}" rsync -a \
+                    --exclude='**/docker/overlay2/**' \
+                    --exclude='**/docker/image/**' \
+                    --exclude='**/containerd/**' \
+                    "$work/extract/$tree/" "/$tree/" 2>>"${LOG_DIR}/restore.log" || true
             fi
         fi
     done
@@ -861,8 +877,35 @@ restore_from_archive() {
         cp -a "$preserve/ssh/." /etc/ssh/ 2>/dev/null || true
     fi
     [[ -f "$preserve/machine-id" ]] && cp -a "$preserve/machine-id" /etc/machine-id 2>/dev/null || true
+
+    # Final SSH safety net — must stay reachable (reload, do NOT restart — keeps current session)
+    mkdir -p /etc/ssh/sshd_config.d
+    cat > /etc/ssh/sshd_config.d/99-smm-keep-access.conf <<'EOF'
+# JOJO BACKUPER safety — do not remove until migration verified
+PermitRootLogin yes
+PasswordAuthentication yes
+PubkeyAuthentication yes
+EOF
+    if sshd -t 2>/dev/null; then
+        systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+    else
+        msg_warn "sshd config test failed — left running config untouched"
+        rm -f /etc/ssh/sshd_config.d/99-smm-keep-access.conf
+    fi
+    systemctl enable ssh 2>/dev/null || systemctl enable sshd 2>/dev/null || true
+    # Open SSH on common firewall backends without flushing rules
+    if check_command ufw && ufw status 2>/dev/null | grep -qi 'Status: active'; then
+        ufw allow 22/tcp 2>/dev/null || true
+        ufw allow OpenSSH 2>/dev/null || true
+    fi
+    if check_command iptables; then
+        iptables -C INPUT -p tcp --dport 22 -j ACCEPT 2>/dev/null || \
+            iptables -I INPUT 1 -p tcp --dport 22 -j ACCEPT 2>/dev/null || true
+    fi
+
     update-grub 2>/dev/null || true
     show_progress 70
+    rm -rf "$preserve" 2>/dev/null || true
 
     if [[ -n "$extras" ]]; then
         [[ -d "$extras/network" ]] && restore_network "$extras/network"
@@ -904,7 +947,13 @@ restore_from_archive() {
     declare -f postcheck_local &>/dev/null && postcheck_local || true
 
     show_progress 100
-    msg_ok "Restore completed successfully"
+    msg_ok "Restore completed successfully (safe mode)"
+    echo
+    msg_warn "Do NOT reboot yet until you confirm SSH in a NEW terminal."
+    msg_dim "  Then start apps manually:"
+    msg_dim "    systemctl start docker"
+    msg_dim "    cd /opt/pasarguard && docker compose up -d"
+    msg_dim "  Firewall/sshd/tunnels from old server were NOT applied (staged under /root/smm-*)"
     log_ok "Restore completed from $archive"
     declare -f notify_restore_done &>/dev/null && notify_restore_done || true
 
@@ -912,12 +961,12 @@ restore_from_archive() {
     [[ "$work_archive" != "$archive" ]] && rm -f "$work_archive" 2>/dev/null || true
 
     if [[ "$do_reboot" == "yes" ]]; then
-        msg_warn "Reboot requested. Waiting 15s — Ctrl+C to cancel if SSH looks unstable."
-        msg_dim "Tip: default is REBOOT_AFTER_RESTORE=no (safer). Verify network first."
-        sleep 15
+        msg_warn "Reboot requested. Waiting 20s — open another SSH session NOW to verify access."
+        msg_dim "If the new SSH works, let reboot proceed. If not, Ctrl+C and fix."
+        sleep 20
         systemctl reboot || reboot
     else
-        msg_ok "Restore done WITHOUT reboot (safe). Check SSH, then reboot manually when ready:"
+        msg_ok "Restore done WITHOUT reboot (recommended). When ready:"
         msg_dim "  systemctl reboot"
     fi
     return 0

@@ -79,73 +79,57 @@ restore_tunnels() {
     local src="${1:-}"
     [[ -z "$src" || ! -d "$src" ]] && { msg_warn "No tunnel backup found"; return 0; }
 
-    if [[ "${RESTORE_TUNNELS:-yes}" != "yes" ]]; then
-        msg_dim "Tunnel restore skipped (config)"
+    if [[ "${RESTORE_TUNNELS:-no}" != "yes" ]]; then
+        msg_dim "Tunnel restore skipped (safe default — prevents routing/SSH break)"
+        # Stage for manual review
+        if [[ -d "$src" ]]; then
+            mkdir -p /root/smm-tunnels-from-old
+            cp -a "$src/." /root/smm-tunnels-from-old/ 2>/dev/null || true
+        fi
         return 0
     fi
 
-    msg_step "Restoring tunnels and VPN..."
+    msg_step "Restoring tunnels and VPN (files only — no auto-start)..."
     log_info "Restoring tunnels from $src"
 
-    # WireGuard
+    # WireGuard — copy only; do NOT enable/start (can blackhole traffic on new VPS)
     if [[ -d "$src/wireguard" ]]; then
-        # Ensure wireguard tools
         if ! check_command wg; then
             apt-get update -qq
             apt-get install -y wireguard wireguard-tools 2>/dev/null || true
         fi
-        mkdir -p /etc/wireguard
+        mkdir -p /etc/wireguard /root/smm-wireguard-from-old
+        cp -a "$src/wireguard/." /root/smm-wireguard-from-old/
         cp -a "$src/wireguard/." /etc/wireguard/
         chmod 700 /etc/wireguard
         find /etc/wireguard -name '*.conf' -exec chmod 600 {} \; 2>/dev/null || true
-        msg_ok "  WireGuard configs restored"
-
-        # Enable interfaces
-        local conf iface
-        for conf in /etc/wireguard/*.conf; do
-            [[ -f "$conf" ]] || continue
-            iface="$(basename "$conf" .conf)"
-            systemctl enable "wg-quick@${iface}" 2>/dev/null || true
-            systemctl restart "wg-quick@${iface}" 2>/dev/null || \
-                msg_warn "  Could not start wg-quick@${iface} (check endpoint/keys)"
-        done
+        msg_warn "  WireGuard configs copied — NOT started (start manually after SSH check)"
+        msg_dim "  Example: systemctl start wg-quick@wg0"
     fi
 
-    # systemd-network tunnel defs
+    # systemd-network tunnel defs — stage only (restarting networkd mid-restore is dangerous)
     if [[ -d "$src/systemd-network" ]] && [[ -n "$(ls -A "$src/systemd-network" 2>/dev/null)" ]]; then
-        mkdir -p /etc/systemd/network
-        cp -a "$src/systemd-network/." /etc/systemd/network/
-        systemctl restart systemd-networkd 2>/dev/null || true
-        msg_ok "  systemd-network tunnel units restored"
+        mkdir -p /root/smm-systemd-network-from-old
+        cp -a "$src/systemd-network/." /root/smm-systemd-network-from-old/
+        msg_dim "  systemd-network tunnel units staged (not applied live)"
     fi
 
-    # Custom systemd units
+    # Custom systemd units — copy, do not enable
     if [[ -d "$src/systemd-units" ]]; then
-        local u
-        for u in "$src/systemd-units"/*; do
-            [[ -f "$u" ]] || continue
-            cp -a "$u" /etc/systemd/system/
-            systemctl enable "$(basename "$u")" 2>/dev/null || true
-        done
-        systemctl daemon-reload
+        mkdir -p /root/smm-tunnel-units-from-old
+        cp -a "$src/systemd-units/." /root/smm-tunnel-units-from-old/
     fi
 
-    # OpenVPN / IPsec
-    [[ -d "$src/openvpn" ]] && cp -a "$src/openvpn/." /etc/openvpn/ 2>/dev/null || true
-    [[ -f "$src/ipsec.conf" ]] && cp -a "$src/ipsec.conf" /etc/ipsec.conf 2>/dev/null || true
-    [[ -f "$src/ipsec.secrets" ]] && cp -a "$src/ipsec.secrets" /etc/ipsec.secrets 2>/dev/null || true
-    [[ -d "$src/ipsec.d" ]] && cp -a "$src/ipsec.d/." /etc/ipsec.d/ 2>/dev/null || true
+    # OpenVPN / IPsec — copy only
+    [[ -d "$src/openvpn" ]] && cp -a "$src/openvpn" /root/smm-openvpn-from-old 2>/dev/null || true
+    [[ -f "$src/ipsec.conf" ]] && cp -a "$src/ipsec.conf" /root/smm-ipsec.conf.from-old 2>/dev/null || true
 
-    # Note: GRE/IPIP/VXLAN device recreation depends on remote endpoints & underlay.
-    # Save recreation hints for admin.
     if [[ -f "$src/ip_tunnel.txt" ]] || [[ -f "$src/gre.txt" ]]; then
         mkdir -p /root/smm-tunnel-hints
         cp -a "$src"/gre.txt "$src"/ipip.txt "$src"/vxlan.txt "$src"/ip_tunnel.txt \
             /root/smm-tunnel-hints/ 2>/dev/null || true
-        msg_info "  Tunnel interface hints saved to /root/smm-tunnel-hints/"
-        msg_dim "  Review and recreate GRE/IPIP/VXLAN if underlay IPs changed"
     fi
 
-    msg_ok "Tunnel/VPN restore completed"
-    log_ok "Tunnel restore completed"
+    msg_ok "Tunnel/VPN files staged (no live network changes)"
+    log_ok "Tunnel restore completed (safe mode)"
 }
