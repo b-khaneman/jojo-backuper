@@ -974,12 +974,16 @@ EOF
         [[ -d "$extras/services" ]] && restore_services "$extras/services"
     fi
 
-    # Ensure docker CLI/packages exist when panel/compose was restored (do NOT auto compose-up)
-    if [[ -d /opt/pasarguard ]] || [[ -d "${extras:-}/pasarguard" ]] || [[ -d "${extras:-}/docker" ]] || \
-       compgen -G '/opt/*/docker-compose.y*ml' &>/dev/null || compgen -G '/opt/*/compose.y*ml' &>/dev/null; then
-        if declare -f ensure_docker_installed &>/dev/null; then
-            ensure_docker_installed || msg_warn "Docker package install failed — install manually later"
+    # Ensure docker + auto-heal panel stack (APT/Docker conflicts/stale containers)
+    if [[ "${AUTO_HEAL_AFTER_RESTORE:-yes}" == "yes" ]]; then
+        msg_step "Running automatic heal (APT / Docker / PasarGuard)..."
+        if declare -f heal_new_server &>/dev/null; then
+            heal_new_server || msg_warn "Auto-heal reported issues — run: sudo jojo heal"
+        else
+            declare -f ensure_docker_installed &>/dev/null && ensure_docker_installed || true
         fi
+    elif [[ -d /opt/pasarguard ]] || [[ -d "${extras:-}/pasarguard" ]] || [[ -d "${extras:-}/docker" ]]; then
+        declare -f ensure_docker_installed &>/dev/null && ensure_docker_installed || true
     fi
 
     declare -f clean_cloud_init &>/dev/null && clean_cloud_init
@@ -998,19 +1002,15 @@ EOF
     declare -f postcheck_local &>/dev/null && postcheck_local || true
 
     show_progress 100
-    msg_ok "Restore completed successfully (safe mode)"
+    msg_ok "Restore completed"
     echo
-    msg_warn "Do NOT reboot yet until you confirm SSH in a NEW terminal."
-    msg_dim "  Then start apps manually:"
-    if check_command docker; then
-        msg_dim "    systemctl start docker   # if not already running"
-        msg_dim "    cd /opt/pasarguard && docker compose up -d"
+    msg_warn "Confirm SSH in a NEW terminal before reboot."
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qiE 'pasar|mariadb|panel'; then
+        msg_ok "PasarGuard containers look up (docker ps)"
     else
-        msg_dim "    apt-get update && apt-get install -y docker.io docker-compose-v2"
-        msg_dim "    systemctl enable --now docker"
-        msg_dim "    cd /opt/pasarguard && docker compose up -d"
+        msg_dim "If panel is down: sudo jojo heal"
+        msg_dim "  or: curl -fsSL https://raw.githubusercontent.com/b-khaneman/jojo-backuper/main/server-migration-manager/scripts/heal-new-server.sh | sudo bash"
     fi
-    msg_dim "  Firewall/sshd/tunnels from old server were NOT applied (staged under /root/smm-*)"
     log_ok "Restore completed from $archive"
     declare -f notify_restore_done &>/dev/null && notify_restore_done || true
 
@@ -1019,12 +1019,10 @@ EOF
 
     if [[ "$do_reboot" == "yes" ]]; then
         msg_warn "Reboot requested. Waiting 20s — open another SSH session NOW to verify access."
-        msg_dim "If the new SSH works, let reboot proceed. If not, Ctrl+C and fix."
         sleep 20
         systemctl reboot || reboot
     else
-        msg_ok "Restore done WITHOUT reboot (recommended). When ready:"
-        msg_dim "  systemctl reboot"
+        msg_ok "Restore done WITHOUT reboot (recommended)."
     fi
     return 0
 }

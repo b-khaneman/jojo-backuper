@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 #
-#   JOJO BACKUPER v1.3.8
+#   JOJO BACKUPER v1.4.0
 #   by @B_KHANEMAN
 #   Server Migration Manager — Enterprise VPS Cloning & Migration
 #
@@ -44,6 +44,7 @@ source "${SCRIPT_DIR}/modules/network.sh"
 source "${SCRIPT_DIR}/modules/firewall.sh"
 source "${SCRIPT_DIR}/modules/database.sh"
 source "${SCRIPT_DIR}/modules/docker.sh"
+source "${SCRIPT_DIR}/modules/heal.sh"
 source "${SCRIPT_DIR}/modules/pasarguard.sh"
 source "${SCRIPT_DIR}/modules/ssl.sh"
 source "${SCRIPT_DIR}/modules/tunnels.sh"
@@ -84,6 +85,7 @@ Backups:
 Checks:
   preflight           Pre-flight check
   postcheck           Health check
+  heal                Auto-heal APT/Docker/PasarGuard on THIS server
 
 Advanced:
   estimate            Estimate backup size
@@ -120,6 +122,8 @@ run_command() {
         postcheck)
             if [[ -n "${REMOTE_HOST:-}" ]]; then postcheck_remote; else postcheck_local; fi
             ;;
+        heal|auto-heal|fix-docker)
+            heal_new_server ;;
         report)      generate_migration_report ;;
         schedule)    install_systemd_timer ;;
         notify-test) test_notifications ;;
@@ -187,15 +191,15 @@ main_menu() {
         print_menu
         # Always read from the controlling terminal
         if [[ -r /dev/tty ]]; then
-            read -r -p "Select option [1-14]: " choice < /dev/tty || choice=""
+            read -r -p "Select option [1-15]: " choice < /dev/tty || choice=""
         else
-            read -r -p "Select option [1-14]: " choice || choice=""
+            read -r -p "Select option [1-15]: " choice || choice=""
         fi
         # Trim whitespace / CR
         choice="$(echo "$choice" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         echo
         if [[ -z "$choice" ]]; then
-            msg_warn "No input received — type a number (1-14) and press Enter"
+            msg_warn "No input received — type a number (1-15) and press Enter"
             sleep 1
             continue
         fi
@@ -214,15 +218,16 @@ main_menu() {
                 if [[ -n "${REMOTE_HOST:-}" ]]; then postcheck_remote; else postcheck_local; fi
                 pause_enter
                 ;;
-            12) update_from_github ;;
-            13)
+            12) heal_new_server; pause_enter ;;
+            13) update_from_github ;;
+            14)
                 echo
                 msg_ok "Goodbye."
                 exit 0
                 ;;
-            14) advanced_menu ;;
+            15) advanced_menu ;;
             *)
-                msg_warn "Invalid option: '$choice' — enter 1 to 14"
+                msg_warn "Invalid option: '$choice' — enter 1 to 15"
                 sleep 1
                 ;;
         esac

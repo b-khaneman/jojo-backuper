@@ -600,9 +600,10 @@ print_menu() {
     echo -e "  ${C_WHITE}11)${C_RESET} Health check"
     echo
     echo -e "  ${C_YELLOW}${C_BOLD}── System ──${C_RESET}"
-    echo -e "  ${C_WHITE}12)${C_RESET} Update from GitHub"
-    echo -e "  ${C_WHITE}13)${C_RESET} Exit"
-    echo -e "  ${C_WHITE}14)${C_RESET} Advanced"
+    echo -e "  ${C_WHITE}12)${C_RESET} ${C_GREEN}Auto-heal this server${C_RESET}  ${C_DIM}(fix APT/Docker/PasarGuard)${C_RESET}"
+    echo -e "  ${C_WHITE}13)${C_RESET} Update from GitHub"
+    echo -e "  ${C_WHITE}14)${C_RESET} Exit"
+    echo -e "  ${C_WHITE}15)${C_RESET} Advanced"
     echo
     echo -e "${C_DIM}-----------------------------------------${C_RESET}"
     if [[ -n "${REMOTE_HOST:-}" ]]; then
