@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 #
-#   JOJO BACKUPER v1.3.3
+#   JOJO BACKUPER v1.3.4
 #   by @B_KHANEMAN
 #   Server Migration Manager — Enterprise VPS Cloning & Migration
 #
@@ -65,23 +65,35 @@ usage() {
     cat <<EOF
 Usage: sudo $0 [command]
 
-Core:
-  deploy              Deploy backups + toolkit to new server
-  sudo-restore        Restore on new server (sudo)
-  pasarguard|pg-panel Migrate PasarGuard panel only (end-to-end)
-  backup              Create full server backup
-  update              Update JOJO BACKUPER from GitHub
+Quick:
+  deploy              Deploy to new server
+  sudo-restore        Restore backup
+  pasarguard|pg-panel Migrate PasarGuard panel
+  backup              Create full backup
+  update              Update from GitHub
 
-Connection & transfer:
-  connect | upload
+Transfer:
+  connect             Connect to new server
+  upload              Upload backup
 
-Tools:
-  verify | info | delete | preflight | postcheck
+Backups:
+  verify              Verify backup
+  info                Show backups
+  delete              Delete backup
+
+Checks:
+  preflight           Pre-flight check
+  postcheck           Health check
 
 Advanced:
-  estimate | wizard | cleanup | report | schedule | notify-test
+  estimate            Estimate backup size
+  wizard              Full migration wizard
+  report              Migration report
+  schedule            Schedule weekly backup
+  notify-test         Test notifications
+  cleanup             Delete backup (same as delete)
 
-One-line install + run (from any Ubuntu server):
+Install + run:
   curl -fsSL https://raw.githubusercontent.com/b-khaneman/jojo-backuper/main/bootstrap.sh | sudo bash
 
 EOF
@@ -134,18 +146,17 @@ advanced_menu() {
     while true; do
         print_advanced_menu
         if [[ -r /dev/tty ]]; then
-            read -r -p "Advanced [0-6]: " adv < /dev/tty || adv=""
+            read -r -p "Advanced [0-5]: " adv < /dev/tty || adv=""
         else
-            read -r -p "Advanced [0-6]: " adv || adv=""
+            read -r -p "Advanced [0-5]: " adv || adv=""
         fi
         adv="$(echo "$adv" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         echo
         case "$adv" in
             1) estimate_backup_size; pause_enter ;;
             2) run_full_migration_wizard; pause_enter ;;
-            3) cleanup_backups; pause_enter ;;
-            4) generate_migration_report; pause_enter ;;
-            5)
+            3) generate_migration_report; pause_enter ;;
+            4)
                 echo "  a) systemd timer (recommended)"
                 echo "  b) cron"
                 if [[ -r /dev/tty ]]; then
@@ -156,10 +167,10 @@ advanced_menu() {
                 if [[ "${sch:-a}" == "b" ]]; then schedule_backup_cron; else install_systemd_timer; fi
                 pause_enter
                 ;;
-            6) test_notifications; pause_enter ;;
+            5) test_notifications; pause_enter ;;
             0|"") return 0 ;;
             *)
-                msg_warn "Invalid option: '$adv' — enter 0 to 6"
+                msg_warn "Invalid option: '$adv' — enter 0 to 5"
                 sleep 1
                 ;;
         esac
