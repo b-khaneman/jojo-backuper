@@ -866,17 +866,26 @@ restore_from_archive() {
                     fi
                 fi
             else
+                # Never restore Docker runtime state (broken container IDs brick compose on new host)
                 "${run_soft[@]}" rsync -aAX \
                     --exclude='**/docker/overlay2/**' \
                     --exclude='**/docker/image/**' \
-                    --exclude='**/containerd/**' \
+                    --exclude='**/docker/containers/**' \
+                    --exclude='**/docker/network/**' \
+                    --exclude='**/docker/swarm/**' \
+                    --exclude='**/docker/runtimes/**' \
+                    --exclude='**/docker/tmp/**' \
                     --exclude='**/docker/buildkit/**' \
+                    --exclude='**/docker/engine-id' \
+                    --exclude='**/containerd/**' \
                     --exclude='**/journal/**' \
                     --exclude='**/log/journal/**' \
                     "$work/extract/$tree/" "/$tree/" 2>>"${LOG_DIR}/restore.log" || \
                 "${run_soft[@]}" rsync -a \
                     --exclude='**/docker/overlay2/**' \
                     --exclude='**/docker/image/**' \
+                    --exclude='**/docker/containers/**' \
+                    --exclude='**/docker/network/**' \
                     --exclude='**/containerd/**' \
                     "$work/extract/$tree/" "/$tree/" 2>>"${LOG_DIR}/restore.log" || true
             fi

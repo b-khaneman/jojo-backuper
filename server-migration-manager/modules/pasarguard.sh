@@ -445,9 +445,11 @@ restore_pasarguard() {
         fi
     else
         msg_warn "  Panel files restored — NOT auto-started (safe mode)"
+        msg_dim "    # If compose errors about missing container IDs (old host state):"
+        msg_dim "    docker rm -f \$(docker ps -aq); docker compose -p pasarguard down --remove-orphans"
         msg_dim "    systemctl start docker"
-        msg_dim "    cd /opt/pasarguard && docker compose -p pasarguard up -d"
-        msg_dim "    # then import DB if needed from /root/smm-pasarguard-mariadb/"
+        msg_dim "    cd /opt/pasarguard && docker compose -p pasarguard up -d --force-recreate"
+        msg_dim "    # DB dumps (if any): /root/smm-pasarguard-mariadb/"
     fi
 
     echo
