@@ -50,8 +50,24 @@ if [[ -d /opt/pasarguard ]]; then
   sleep 5
   docker ps -a
   echo "=== PasarGuard heal attempted ==="
-else
-  echo "No /opt/pasarguard — Docker healed only"
 fi
+
+# Official CLI (panel dir can exist without /usr/local/bin/pasarguard)
+if ! command -v pasarguard >/dev/null 2>&1; then
+  echo "=== Installing PasarGuard CLI ==="
+  if [[ -f /opt/pasarguard/pasarguard.sh ]]; then
+    cp -a /opt/pasarguard/pasarguard.sh /usr/local/bin/pasarguard
+    chmod +x /usr/local/bin/pasarguard
+  elif curl -fsSL "https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh" -o /usr/local/bin/pasarguard; then
+    chmod +x /usr/local/bin/pasarguard
+  else
+    cat > /usr/local/bin/pasarguard <<'EOF'
+#!/bin/bash
+exec bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" -- "$@"
+EOF
+    chmod +x /usr/local/bin/pasarguard
+  fi
+fi
+command -v pasarguard && echo "pasarguard CLI: $(command -v pasarguard)" || echo "pasarguard CLI still missing"
 
 echo "=== DONE ==="

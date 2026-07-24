@@ -130,6 +130,37 @@ _pg_compose() {
     fi
 }
 
+# Official PasarGuard CLI (/usr/local/bin/pasarguard) — panel dir can exist without this
+ensure_pasarguard_cli() {
+    if command -v pasarguard &>/dev/null && [[ -x "$(command -v pasarguard)" ]]; then
+        msg_ok "PasarGuard CLI present: $(command -v pasarguard)"
+        return 0
+    fi
+    # Local copy already shipped with panel?
+    for cand in /opt/pasarguard/pasarguard.sh /opt/pasarguard/pasarguard /usr/local/bin/pasarguard.sh; do
+        if [[ -f "$cand" ]]; then
+            cp -a "$cand" /usr/local/bin/pasarguard
+            chmod +x /usr/local/bin/pasarguard
+            msg_ok "PasarGuard CLI linked from $cand"
+            return 0
+        fi
+    done
+    msg_step "Installing official PasarGuard CLI → /usr/local/bin/pasarguard"
+    if curl -fsSL "https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh" -o /usr/local/bin/pasarguard; then
+        chmod +x /usr/local/bin/pasarguard
+        msg_ok "PasarGuard CLI installed"
+        return 0
+    fi
+    # Offline-safe wrapper
+    cat > /usr/local/bin/pasarguard <<'EOF'
+#!/bin/bash
+exec bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" -- "$@"
+EOF
+    chmod +x /usr/local/bin/pasarguard
+    msg_warn "PasarGuard CLI wrapper installed (needs network on first run)"
+    return 0
+}
+
 # Bring PasarGuard panel up cleanly
 heal_pasarguard() {
     if [[ ! -d /opt/pasarguard ]]; then
@@ -137,6 +168,8 @@ heal_pasarguard() {
         return 0
     fi
     msg_step "Healing PasarGuard panel..."
+
+    ensure_pasarguard_cli || true
 
     # Strip bad COMPOSE_PROJECT_NAME if it looks like a container id
     if [[ -f /opt/pasarguard/.env ]]; then
@@ -177,6 +210,8 @@ heal_pasarguard() {
         true
     fi
 
+    ensure_pasarguard_cli || true
+
     echo
     docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' 2>/dev/null || docker ps
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -qiE 'pasar|mariadb|panel'; then
@@ -206,6 +241,7 @@ heal_new_server() {
     systemctl start docker 2>/dev/null || true
     sleep 2
     heal_pasarguard || true
+    ensure_pasarguard_cli || true
 
     # SSH keep-alive drop-in
     mkdir -p /etc/ssh/sshd_config.d
@@ -219,6 +255,7 @@ EOF
     echo
     msg_ok "AUTO-HEAL finished"
     msg_dim "Panel dir: /opt/pasarguard"
+    command -v pasarguard &>/dev/null && msg_dim "CLI: $(command -v pasarguard)"
     msg_dim "Logs: ${LOG_DIR:-/var/log/server-migration}/heal.log"
     log_ok "AUTO-HEAL done"
     return 0
