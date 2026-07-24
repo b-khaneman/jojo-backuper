@@ -4,6 +4,46 @@
 # SERVER MIGRATION MANAGER v1.0 | JOJO BACKUP
 #===============================================================================
 
+# Install docker.io + compose so `docker` exists. Enables/starts the daemon.
+# Does NOT run docker compose up (CPU-safe). Call after restore when panel/compose present.
+ensure_docker_installed() {
+    export TERM="${TERM:-xterm-256color}"
+    if check_command docker; then
+        systemctl enable docker 2>/dev/null || true
+        if ! docker info &>/dev/null; then
+            systemctl start docker 2>/dev/null || true
+            sleep 1
+        fi
+        if check_command docker; then
+            msg_ok "Docker already available: $(docker --version 2>/dev/null | head -1)"
+        fi
+        # Ensure compose plugin/package when possible
+        if ! docker compose version &>/dev/null && ! check_command docker-compose; then
+            apt-get update -qq 2>/dev/null || true
+            apt-get install -y docker-compose-v2 2>/dev/null || apt-get install -y docker-compose 2>/dev/null || true
+        fi
+        return 0
+    fi
+
+    msg_step "Installing Docker packages (docker.io + compose)..."
+    apt-get update -qq 2>/dev/null || true
+    if apt-get install -y docker.io docker-compose-v2 2>/dev/null || \
+       apt-get install -y docker.io docker-compose 2>/dev/null || \
+       apt-get install -y docker.io 2>/dev/null; then
+        systemctl enable docker 2>/dev/null || true
+        systemctl start docker 2>/dev/null || true
+        sleep 1
+        if check_command docker; then
+            msg_ok "Docker installed: $(docker --version 2>/dev/null | head -1)"
+            msg_dim "Next: cd /opt/pasarguard && docker compose up -d"
+            return 0
+        fi
+    fi
+    msg_warn "Could not install Docker via apt"
+    msg_dim "Manual: apt-get update && apt-get install -y docker.io docker-compose-v2 && systemctl enable --now docker"
+    return 1
+}
+
 backup_docker() {
     local out="${1:-}"
     [[ -z "$out" ]] && out="${METADATA_DIR:-/tmp}/docker"
@@ -115,14 +155,7 @@ restore_docker() {
     msg_step "Restoring Docker..."
     log_info "Restoring Docker from $src"
 
-    # Install docker if missing
-    if ! check_command docker; then
-        msg_info "  Installing Docker..."
-        apt-get update -qq
-        apt-get install -y docker.io docker-compose-v2 2>/dev/null || \
-            apt-get install -y docker.io docker-compose 2>/dev/null || \
-            msg_warn "  Could not install Docker automatically"
-    fi
+    ensure_docker_installed || msg_warn "  Docker install incomplete — continuing with available tools"
 
     # Restore daemon config
     if [[ -d "$src/etc-docker/docker" ]]; then
@@ -137,8 +170,9 @@ restore_docker() {
     systemctl start docker 2>/dev/null || true
     sleep 2
 
-    if ! docker info &>/dev/null; then
+    if ! check_command docker || ! docker info &>/dev/null; then
         msg_warn "Docker daemon not running — image/volume restore deferred"
+        msg_dim "  Install/start later: apt-get install -y docker.io docker-compose-v2 && systemctl enable --now docker"
         return 0
     fi
 

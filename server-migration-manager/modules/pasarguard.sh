@@ -319,6 +319,11 @@ restore_pasarguard() {
 
     msg_step "Restoring PasarGuard panel/node data..."
 
+    # Panel needs docker CLI even when we do not auto-start compose
+    if declare -f ensure_docker_installed &>/dev/null; then
+        ensure_docker_installed || msg_warn "  Docker not installed — panel files will still be restored"
+    fi
+
     # Bind dirs from tar.zst
     if [[ -d "$src/bind" ]]; then
         local f
@@ -502,7 +507,12 @@ EOF
         return 1
     fi
 
-    create_checksum "$archive" >/dev/null 2>&1 || sha256sum "$archive" > "${archive}.sha256"
+    create_checksum "$archive" >/dev/null 2>&1 || {
+        local _h _b
+        _h="$(sha256sum "$archive" | awk '{print $1}')"
+        _b="$(basename "$archive")"
+        printf '%s  %s\n' "$_h" "$_b" > "${archive}.sha256"
+    }
     local size when
     size="$(human_size "$(stat -c%s "$archive")" 2>/dev/null || du -h "$archive" | awk '{print $1}')"
     when="$(format_backup_datetime "$ts")"
@@ -541,8 +551,10 @@ restore_pasarguard_panel_archive() {
     fi
     [[ -n "$src" && -d "$src" ]] || die "Invalid panel archive (no pasarguard/ payload)"
 
-    # Ensure docker present (panel needs it) — lightweight
-    if ! check_command docker; then
+    # Ensure docker present (panel needs it) — package only; compose start gated by auto_start
+    if declare -f ensure_docker_installed &>/dev/null; then
+        ensure_docker_installed || msg_warn "Docker install failed — panel files restored anyway"
+    elif ! check_command docker; then
         msg_info "Installing Docker for PasarGuard..."
         apt-get update -qq
         apt-get install -y docker.io docker-compose-v2 2>/dev/null \

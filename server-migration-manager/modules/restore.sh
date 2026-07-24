@@ -115,9 +115,11 @@ connect_new_server() {
     echo
     loading_anim "Testing connection" 1
     if test_ssh_connection; then
-        # Probe remote OS
+        # Probe remote OS (keep || on local side — never send "; ||" to remote bash -c)
         local remote_info
-        remote_info="$(ssh_cmd "grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\\\"'; || echo unknown")"
+        remote_info="$(ssh_cmd 'grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d "\""' 2>/dev/null || true)"
+        remote_info="$(printf '%s' "$remote_info" | tr -d '\r' | head -1)"
+        [[ -n "$remote_info" ]] || remote_info="unknown"
         msg_info "Remote OS: $remote_info"
         ssh_cmd "mkdir -p '$REMOTE_PATH'" 2>/dev/null || \
             remote_sudo "mkdir -p '$REMOTE_PATH'" 2>/dev/null || true
@@ -329,6 +331,7 @@ deploy_to_new_server() {
     local install_script
     install_script=$(cat <<EOF
 set -e
+export TERM="\${TERM:-xterm-256color}"
 mkdir -p /opt/jojo-backup
 zstd -dc '${REMOTE_PATH}/jojo-backup-toolkit.tar.zst' | tar -xf - -C /opt/jojo-backup
 chmod +x /opt/jojo-backup/migrate.sh /opt/jojo-backup/restore-agent.sh /opt/jojo-backup/install.sh
@@ -430,6 +433,7 @@ sudo_restore_on_new_server() {
     local restore_script
     restore_script=$(cat <<EOF
 set -e
+export TERM="\${TERM:-xterm-256color}"
 chmod +x '$agent'
 bash '$agent' --archive '$archive_path' --yes --reboot=${reboot_flag}
 EOF
@@ -622,6 +626,7 @@ restore_server_remote() {
     local restore_script
     restore_script=$(cat <<EOF
 set -e
+export TERM="\${TERM:-xterm-256color}"
 chmod +x '$agent_path'
 bash '$agent_path' --archive '${REMOTE_PATH}/${archive_name}' --yes --reboot=${REBOOT_AFTER_RESTORE:-no}
 EOF
@@ -666,13 +671,15 @@ verify_migration_remote() {
     msg_step "Verifying migration on remote..."
     local report
     report="$(ssh_cmd '
+        export TERM="${TERM:-xterm-256color}"
         echo "hostname=$(hostname)"
-        echo "os=$(grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d \"\\\"\")"
+        echo "os=$(grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d "\"")"
         echo "kernel=$(uname -r)"
         echo "disk=$(df -h / | awk "NR==2{print \$4\" free\"}")"
         systemctl is-system-running 2>/dev/null || true
         test -f /var/log/server-migration/restore.log && echo "restore_log=present" || echo "restore_log=missing"
         test -f /etc/smm-restore-complete && echo "marker=OK" || echo "marker=missing"
+        command -v docker >/dev/null && echo "docker=$(docker --version 2>/dev/null | head -1)" || echo "docker=missing"
     ' 2>/dev/null)" || {
         msg_warn "Verification SSH call failed"
         return 1
@@ -726,9 +733,18 @@ restore_from_archive() {
         archive="$joined"
     fi
 
-    # Verify checksum
+    # Verify checksum (hash of actual archive path — ignores legacy absolute paths in .sha256)
     if [[ "${VERIFY_CHECKSUM:-yes}" == "yes" && -f "${archive}.sha256" ]]; then
-        verify_checksum "$archive" || die "Checksum validation failed — aborting restore"
+        if ! verify_checksum "$archive"; then
+            local exp act
+            exp="$(awk 'NF{print $1; exit}' "${archive}.sha256" | tr -d '[:space:]\r')"
+            act="$(sha256sum "$archive" 2>/dev/null | awk '{print $1}')"
+            if [[ -n "$exp" && -n "$act" && "$exp" == "$act" ]]; then
+                msg_ok "Checksum OK via direct hash compare (legacy .sha256 path ignored)"
+            else
+                die "Checksum validation failed — aborting restore"
+            fi
+        fi
     fi
 
     # Decrypt if encrypted (sets DECRYPTED_BACKUP_FILE — never capture msg stdout)
@@ -937,6 +953,14 @@ EOF
         [[ -d "$extras/services" ]] && restore_services "$extras/services"
     fi
 
+    # Ensure docker CLI/packages exist when panel/compose was restored (do NOT auto compose-up)
+    if [[ -d /opt/pasarguard ]] || [[ -d "${extras:-}/pasarguard" ]] || [[ -d "${extras:-}/docker" ]] || \
+       compgen -G '/opt/*/docker-compose.y*ml' &>/dev/null || compgen -G '/opt/*/compose.y*ml' &>/dev/null; then
+        if declare -f ensure_docker_installed &>/dev/null; then
+            ensure_docker_installed || msg_warn "Docker package install failed — install manually later"
+        fi
+    fi
+
     declare -f clean_cloud_init &>/dev/null && clean_cloud_init
 
     msg_step "Reloading systemd and enabling services..."
@@ -957,8 +981,14 @@ EOF
     echo
     msg_warn "Do NOT reboot yet until you confirm SSH in a NEW terminal."
     msg_dim "  Then start apps manually:"
-    msg_dim "    systemctl start docker"
-    msg_dim "    cd /opt/pasarguard && docker compose up -d"
+    if check_command docker; then
+        msg_dim "    systemctl start docker   # if not already running"
+        msg_dim "    cd /opt/pasarguard && docker compose up -d"
+    else
+        msg_dim "    apt-get update && apt-get install -y docker.io docker-compose-v2"
+        msg_dim "    systemctl enable --now docker"
+        msg_dim "    cd /opt/pasarguard && docker compose up -d"
+    fi
     msg_dim "  Firewall/sshd/tunnels from old server were NOT applied (staged under /root/smm-*)"
     log_ok "Restore completed from $archive"
     declare -f notify_restore_done &>/dev/null && notify_restore_done || true

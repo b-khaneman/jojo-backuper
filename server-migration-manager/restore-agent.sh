@@ -11,6 +11,7 @@
 #===============================================================================
 
 set -o pipefail
+export TERM="${TERM:-xterm-256color}"
 
 AGENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -55,6 +56,12 @@ done
 [[ -f "${CONFIG_FILE:-}" ]] && source "$CONFIG_FILE"
 
 SCRIPT_DIR="$(dirname "$MODULES_DIR")"
+# Prefer VERSION file after updates (config.conf SMM_VERSION is often stale)
+if [[ -f "${SCRIPT_DIR}/VERSION" ]]; then
+    SMM_VERSION="$(tr -d '[:space:]' < "${SCRIPT_DIR}/VERSION")"
+elif [[ -f "${AGENT_DIR}/VERSION" ]]; then
+    SMM_VERSION="$(tr -d '[:space:]' < "${AGENT_DIR}/VERSION")"
+fi
 PROJECT_LOG_DIR="${PROJECT_LOG_DIR:-$LOG_DIR}"
 BACKUP_DIR="${BACKUP_DIR:-/backup}"
 

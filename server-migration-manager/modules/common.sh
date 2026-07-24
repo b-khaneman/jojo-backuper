@@ -464,9 +464,14 @@ test_ssh_connection() {
 create_checksum() {
     local file="$1"
     local sumfile="${file}.sha256"
+    local base hash
+    [[ -f "$file" ]] || { msg_error "Cannot checksum missing file: $file"; return 1; }
+    base="$(basename "$file")"
     msg_step "Generating SHA256 checksum..."
-    sha256sum "$file" > "$sumfile"
-    msg_ok "Checksum: $(awk '{print $1}' "$sumfile")"
+    # Store HASH + basename only (never absolute path) so restore works on another host/path
+    hash="$(sha256sum "$file" | awk '{print $1}')"
+    printf '%s  %s\n' "$hash" "$base" > "$sumfile"
+    msg_ok "Checksum: $hash"
     log_ok "Checksum created: $sumfile"
     echo "$sumfile"
 }
@@ -474,27 +479,23 @@ create_checksum() {
 verify_checksum() {
     local file="$1"
     local sumfile="${2:-${file}.sha256}"
+    local expected actual
     if [[ ! -f "$sumfile" ]]; then
         msg_error "Checksum file not found: $sumfile"
         return 1
     fi
-    msg_step "Verifying SHA256 integrity..."
-    if (cd "$(dirname "$file")" && sha256sum -c "$(basename "$sumfile")" 2>/dev/null) || \
-       sha256sum -c "$sumfile" --ignore-missing 2>/dev/null; then
-        # Fallback manual verify
-        local expected actual
-        expected="$(awk '{print $1}' "$sumfile")"
-        actual="$(sha256sum "$file" | awk '{print $1}')"
-        if [[ "$expected" == "$actual" ]]; then
-            msg_ok "Checksum verified"
-            log_ok "Checksum OK for $file"
-            return 0
-        fi
+    if [[ ! -f "$file" ]]; then
+        msg_error "Archive not found for verify: $file"
+        return 1
     fi
-    # Manual compare always
-    local expected actual
-    expected="$(awk '{print $1}' "$sumfile")"
+    msg_step "Verifying SHA256 integrity..."
+    # Always hash the actual $file path — ignore any path embedded in legacy .sha256 sidecars
+    expected="$(awk 'NF{print $1; exit}' "$sumfile" | tr -d '[:space:]\r')"
     actual="$(sha256sum "$file" | awk '{print $1}')"
+    if [[ -z "$expected" || -z "$actual" ]]; then
+        msg_error "Could not read checksum values"
+        return 1
+    fi
     if [[ "$expected" == "$actual" ]]; then
         msg_ok "Checksum verified"
         log_ok "Checksum OK for $file"
@@ -556,7 +557,18 @@ human_size() {
 #-------------------------------------------------------------------------------
 # Banner
 #-------------------------------------------------------------------------------
+load_smm_version() {
+    local dir ver_file
+    for dir in "${SCRIPT_DIR:-}" "${AGENT_DIR:-}" "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"; do
+        [[ -n "$dir" && -f "${dir}/VERSION" ]] || continue
+        SMM_VERSION="$(tr -d '[:space:]' < "${dir}/VERSION")"
+        return 0
+    done
+    return 0
+}
+
 print_banner() {
+    load_smm_version
     clear
     echo -e "${C_CYAN}${C_BOLD}"
     echo "========================================="
