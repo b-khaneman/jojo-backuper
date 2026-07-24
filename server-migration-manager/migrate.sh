@@ -68,6 +68,7 @@ Usage: sudo $0 [command]
 Quick:
   deploy              Deploy backups + toolkit to new server
   sudo-restore        Restore on new server (sudo)
+  pasarguard|pg-panel Migrate PasarGuard panel only (end-to-end)
   update              Update JOJO BACKUPER from GitHub
   backup              Create full server backup
 
@@ -85,6 +86,8 @@ run_command() {
     case "${1:-}" in
         deploy|setup-new)   deploy_to_new_server ;;
         sudo-restore|restore-sudo) sudo_restore_on_new_server ;;
+        pasarguard|pg-panel|migrate-pasarguard|pasar)
+            migrate_pasarguard_panel ;;
         update|upgrade|self-update) update_from_github ;;
         backup)      create_full_backup ;;
         connect)     connect_new_server ;;
@@ -131,36 +134,37 @@ main_menu() {
         print_menu
         # Always read from the controlling terminal
         if [[ -r /dev/tty ]]; then
-            read -r -p "Select option [1-17]: " choice < /dev/tty || choice=""
+            read -r -p "Select option [1-18]: " choice < /dev/tty || choice=""
         else
-            read -r -p "Select option [1-17]: " choice || choice=""
+            read -r -p "Select option [1-18]: " choice || choice=""
         fi
         # Trim whitespace / CR
         choice="$(echo "$choice" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         echo
         if [[ -z "$choice" ]]; then
-            msg_warn "No input received — type a number (1-17) and press Enter"
+            msg_warn "No input received — type a number (1-18) and press Enter"
             sleep 1
             continue
         fi
         case "$choice" in
             1)  deploy_to_new_server; pause_enter ;;
             2)  sudo_restore_on_new_server; pause_enter ;;
-            3)  create_full_backup; pause_enter ;;
-            4)  connect_new_server; pause_enter ;;
-            5)  upload_backup; pause_enter ;;
-            6)  verify_backup; pause_enter ;;
-            7)  show_backup_info; pause_enter ;;
-            8)  cleanup_backups; pause_enter ;;
-            9)  preflight_check; pause_enter ;;
-            10) estimate_backup_size; pause_enter ;;
-            11) run_full_migration_wizard; pause_enter ;;
-            12)
+            3)  migrate_pasarguard_panel; pause_enter ;;
+            4)  create_full_backup; pause_enter ;;
+            5)  connect_new_server; pause_enter ;;
+            6)  upload_backup; pause_enter ;;
+            7)  verify_backup; pause_enter ;;
+            8)  show_backup_info; pause_enter ;;
+            9)  cleanup_backups; pause_enter ;;
+            10) preflight_check; pause_enter ;;
+            11) estimate_backup_size; pause_enter ;;
+            12) run_full_migration_wizard; pause_enter ;;
+            13)
                 if [[ -n "${REMOTE_HOST:-}" ]]; then postcheck_remote; else postcheck_local; fi
                 pause_enter
                 ;;
-            13) generate_migration_report; pause_enter ;;
-            14)
+            14) generate_migration_report; pause_enter ;;
+            15)
                 echo "  a) systemd timer (recommended)"
                 echo "  b) cron"
                 if [[ -r /dev/tty ]]; then
@@ -171,15 +175,15 @@ main_menu() {
                 if [[ "${sch:-a}" == "b" ]]; then schedule_backup_cron; else install_systemd_timer; fi
                 pause_enter
                 ;;
-            15) test_notifications; pause_enter ;;
-            16) update_from_github ;;
-            17)
+            16) test_notifications; pause_enter ;;
+            17) update_from_github ;;
+            18)
                 echo
                 msg_ok "Goodbye."
                 exit 0
                 ;;
             *)
-                msg_warn "Invalid option: '$choice' — enter 1 to 17"
+                msg_warn "Invalid option: '$choice' — enter 1 to 18"
                 sleep 1
                 ;;
         esac

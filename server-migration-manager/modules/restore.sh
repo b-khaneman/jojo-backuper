@@ -255,7 +255,7 @@ deploy_to_new_server() {
     mapfile -t backups < <(ls -1t "${BACKUP_DIR}"/server-backup-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' || true)
     if (( ${#backups[@]} == 0 )); then
         msg_error "No backup found in ${BACKUP_DIR}"
-        msg_info "Create a backup first (menu option 3)"
+        msg_info "Create a backup first (menu option 4)"
         return 1
     fi
 

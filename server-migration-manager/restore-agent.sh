@@ -28,7 +28,8 @@ fi
 
 ARCHIVE=""
 AUTO_YES="no"
-DO_REBOOT="yes"
+DO_REBOOT="no"
+RESTORE_MODE="full"   # full | pasarguard
 LOG_DIR="/var/log/server-migration"
 
 mkdir -p "$LOG_DIR"
@@ -41,8 +42,11 @@ while [[ $# -gt 0 ]]; do
         --yes|-y) AUTO_YES="yes"; shift ;;
         --reboot=*) DO_REBOOT="${1#*=}"; shift ;;
         --reboot) DO_REBOOT="$2"; shift 2 ;;
+        --mode=*) RESTORE_MODE="${1#*=}"; shift ;;
+        --mode) RESTORE_MODE="$2"; shift 2 ;;
+        --pasarguard|--panel) RESTORE_MODE="pasarguard"; shift ;;
         --help|-h)
-            echo "Usage: $0 --archive FILE [--yes] [--reboot=yes|no]"
+            echo "Usage: $0 --archive FILE [--yes] [--reboot=yes|no] [--mode=full|pasarguard]"
             exit 0 ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
@@ -81,21 +85,37 @@ source "${MODULES_DIR}/restore.sh"
 
 if [[ -z "$ARCHIVE" ]]; then
     for candidate in /backup /root /var/backups "$AGENT_DIR" /opt/jojo-backup; do
-        ARCHIVE="$(ls -1t "${candidate}"/server-backup-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' | head -1)"
+        if [[ "$RESTORE_MODE" == "pasarguard" ]]; then
+            ARCHIVE="$(ls -1t "${candidate}"/pasarguard-panel-* 2>/dev/null | grep -E '\.tar\.zst$' | head -1)"
+        else
+            ARCHIVE="$(ls -1t "${candidate}"/server-backup-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' | head -1)"
+        fi
         [[ -n "$ARCHIVE" ]] && break
     done
 fi
 
-[[ -n "$ARCHIVE" && -f "$ARCHIVE" ]] || die "No backup archive. Use --archive /path/to/server-backup-*.tar.zst"
+[[ -n "$ARCHIVE" && -f "$ARCHIVE" ]] || die "No backup archive. Use --archive /path/to/archive.tar.zst"
 
 print_banner
 msg_info "RESTORE AGENT starting on $(hostname)"
 msg_info "Archive : $ARCHIVE"
+msg_info "Mode    : $RESTORE_MODE"
 msg_info "Reboot  : $DO_REBOOT"
 echo
 
 require_root
 setup_signal_traps
+
+if [[ "$RESTORE_MODE" == "pasarguard" ]]; then
+    if [[ "$AUTO_YES" != "yes" ]]; then
+        confirm_action "Restore PasarGuard PANEL only from $(basename "$ARCHIVE")?" || exit 1
+    fi
+    if [[ -f "${ARCHIVE}.sha256" ]]; then
+        verify_checksum "$ARCHIVE" || die "Checksum failed — refusing to restore"
+    fi
+    restore_pasarguard_panel_archive "$ARCHIVE" "${PASARGUARD_AUTO_START:-no}"
+    exit $?
+fi
 
 if [[ "$AUTO_YES" != "yes" ]]; then
     echo -e "${C_RED}${C_BOLD}WARNING: This will overwrite the current server.${C_RESET}"
