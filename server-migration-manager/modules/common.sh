@@ -482,6 +482,32 @@ timestamp() {
     date '+%Y%m%d-%H%M%S'
 }
 
+# Convert compact ts (YYYYMMDD-HHMMSS) → human "YYYY-MM-DD HH:MM:SS"
+format_backup_datetime() {
+    local ts="${1:-}"
+    if [[ "$ts" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})-([0-9]{2})([0-9]{2})([0-9]{2})$ ]]; then
+        echo "${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]} ${BASH_REMATCH[4]}:${BASH_REMATCH[5]}:${BASH_REMATCH[6]}"
+        return 0
+    fi
+    date '+%Y-%m-%d %H:%M:%S'
+}
+
+# Extract / format date-time from a backup filename or fall back to file mtime
+backup_datetime_label() {
+    local path="${1:-}"
+    local base ts
+    base="$(basename "$path" 2>/dev/null || echo "$path")"
+    if [[ "$base" =~ ([0-9]{8}-[0-9]{6}) ]]; then
+        format_backup_datetime "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    if [[ -f "$path" ]]; then
+        ts="$(stat -c%y "$path" 2>/dev/null | cut -d. -f1)"
+        [[ -n "$ts" ]] && { echo "$ts"; return 0; }
+    fi
+    date '+%Y-%m-%d %H:%M:%S'
+}
+
 human_size() {
     local bytes="$1"
     if check_command numfmt; then
@@ -524,13 +550,14 @@ print_menu() {
     echo -e "  ${C_DIM}─── Tools ───${C_RESET}"
     echo -e "  ${C_WHITE} 7)${C_RESET} Verify Backup"
     echo -e "  ${C_WHITE} 8)${C_RESET} Show Backup Information"
-    echo -e "  ${C_WHITE} 9)${C_RESET} Pre-flight Check"
-    echo -e "  ${C_WHITE}10)${C_RESET} Post-Migration Health Check"
-    echo -e "  ${C_WHITE}11)${C_RESET} ${C_MAGENTA}Update from GitHub${C_RESET}  ${C_DIM}(auto-pull latest JOJO BACKUPER)${C_RESET}"
-    echo -e "  ${C_WHITE}12)${C_RESET} Exit"
+    echo -e "  ${C_WHITE} 9)${C_RESET} ${C_RED}حذف بکاپ${C_RESET} / ${C_RED}Delete Backup${C_RESET}"
+    echo -e "  ${C_WHITE}10)${C_RESET} Pre-flight Check"
+    echo -e "  ${C_WHITE}11)${C_RESET} Post-Migration Health Check"
+    echo -e "  ${C_WHITE}12)${C_RESET} ${C_MAGENTA}Update from GitHub${C_RESET}  ${C_DIM}(auto-pull latest JOJO BACKUPER)${C_RESET}"
+    echo -e "  ${C_WHITE}13)${C_RESET} Exit"
     echo
     echo -e "  ${C_YELLOW}${C_BOLD}─── More ───${C_RESET}"
-    echo -e "  ${C_WHITE}13)${C_RESET} Advanced tools  ${C_DIM}(estimate, wizard, cleanup, report, schedule, notify)${C_RESET}"
+    echo -e "  ${C_WHITE}14)${C_RESET} Advanced tools  ${C_DIM}(estimate, wizard, cleanup, report, schedule, notify)${C_RESET}"
     echo
     echo -e "${C_DIM}-----------------------------------------${C_RESET}"
     if [[ -n "${REMOTE_HOST:-}" ]]; then
@@ -542,6 +569,7 @@ print_menu() {
     latest="$(ls -1t "${BACKUP_DIR}"/server-backup-* "${BACKUP_DIR}"/pasarguard-panel-* 2>/dev/null | grep -E '\.tar\.zst(\.gpg|\.enc)?$' | head -1)"
     if [[ -n "$latest" ]]; then
         echo -e "  Latest: ${C_CYAN}$(basename "$latest")${C_RESET}"
+        echo -e "  Date   : ${C_WHITE}$(backup_datetime_label "$latest")${C_RESET}"
     fi
     if [[ -f "${PROJECT_LOG_DIR}/.last_deploy" ]]; then
         echo -e "  Deploy: ${C_GREEN}ready for restore${C_RESET}"
@@ -560,7 +588,7 @@ print_advanced_menu() {
     echo -e "  ${C_YELLOW}${C_BOLD}─── Advanced tools ───${C_RESET}"
     echo -e "  ${C_WHITE} 1)${C_RESET} Estimate Backup Size"
     echo -e "  ${C_WHITE} 2)${C_RESET} Full Migration Wizard"
-    echo -e "  ${C_WHITE} 3)${C_RESET} Cleanup Backup Files"
+    echo -e "  ${C_WHITE} 3)${C_RESET} Cleanup / Delete Backups  ${C_DIM}(interactive)${C_RESET}"
     echo -e "  ${C_WHITE} 4)${C_RESET} Generate Migration Report"
     echo -e "  ${C_WHITE} 5)${C_RESET} Schedule Weekly Backup"
     echo -e "  ${C_WHITE} 6)${C_RESET} Test Notifications"

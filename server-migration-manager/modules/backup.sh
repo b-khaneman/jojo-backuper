@@ -284,10 +284,14 @@ create_full_backup() {
 
     echo
     msg_ok "Backup completed successfully"
+    local when
+    when="$(format_backup_datetime "$ts")"
     msg_info "Archive : $archive"
     msg_info "Size    : $size"
+    msg_info "Date    : $when"
     msg_info "SHA256  : $(awk '{print $1}' "${archive}.sha256" 2>/dev/null)"
-    log_ok "Backup completed: $archive ($size)"
+    echo -e "  ${C_GREEN}${C_BOLD}Backup saved: $(basename "$archive") | ${when}${C_RESET}"
+    log_ok "Backup completed: $archive ($size) at $when"
     declare -f notify_backup_done &>/dev/null && notify_backup_done "$archive" "$size" || true
 
     enforce_backup_retention
@@ -386,7 +390,7 @@ verify_backup() {
 }
 
 #-------------------------------------------------------------------------------
-# Show backup information
+# Show backup information (full server + PasarGuard panel)
 #-------------------------------------------------------------------------------
 show_backup_info() {
     echo
@@ -396,19 +400,28 @@ show_backup_info() {
     local f
     for f in "${BACKUP_DIR}"/server-backup-*.tar.zst \
              "${BACKUP_DIR}"/server-backup-*.tar.zst.gpg \
-             "${BACKUP_DIR}"/server-backup-*.tar.zst.enc; do
+             "${BACKUP_DIR}"/server-backup-*.tar.zst.enc \
+             "${BACKUP_DIR}"/pasarguard-panel-*.tar.zst \
+             "${BACKUP_DIR}"/pasarguard-panel-*.tar.zst.gpg \
+             "${BACKUP_DIR}"/pasarguard-panel-*.tar.zst.enc; do
         [[ -f "$f" ]] || continue
         found=1
-        local bytes size sha created
+        local bytes size sha created kind
         bytes="$(stat -c%s "$f" 2>/dev/null || echo 0)"
         size="$(human_size "$bytes")"
         sha="(none)"
         [[ -f "${f}.sha256" ]] && sha="$(awk '{print $1}' "${f}.sha256")"
-        created="$(stat -c%y "$f" 2>/dev/null | cut -d. -f1 || echo unknown)"
+        created="$(backup_datetime_label "$f")"
+        if [[ "$(basename "$f")" == pasarguard-panel-* ]]; then
+            kind="PasarGuard panel"
+        else
+            kind="Full server"
+        fi
         echo -e "${C_CYAN}────────────────────────────────────────${C_RESET}"
+        echo -e "  Type    : ${C_WHITE}${kind}${C_RESET}"
         echo -e "  File    : ${C_WHITE}$(basename "$f")${C_RESET}"
         echo -e "  Size    : $size"
-        echo -e "  Created : $created"
+        echo -e "  Date/Time: ${C_GREEN}${created}${C_RESET}"
         echo -e "  SHA256  : ${C_DIM}${sha}${C_RESET}"
         if [[ -f "${f}.manifest" ]]; then
             echo -e "  Manifest:"
@@ -422,25 +435,137 @@ show_backup_info() {
 }
 
 #-------------------------------------------------------------------------------
-# Cleanup backup files
+# Remove one backup archive and its sidecar files
 #-------------------------------------------------------------------------------
-cleanup_backups() {
+remove_backup_artifact() {
+    local f="$1"
+    [[ -n "$f" && -e "$f" ]] || return 1
+    rm -f "$f" \
+        "${f}.sha256" \
+        "${f}.manifest" \
+        "${f}.parts.list" \
+        "${f}.parts" 2>/dev/null || true
+    rm -f "${f}.part."* 2>/dev/null || true
+    # Also catch .sha256/.manifest when f already includes extension variants
+    return 0
+}
+
+#-------------------------------------------------------------------------------
+# Interactive delete: list backups (size + date/time), pick number(s) or 'all'
+#-------------------------------------------------------------------------------
+delete_backups() {
     set_log_file "${PROJECT_LOG_DIR}/backup.log"
-    show_backup_info
-    if ! confirm_action "This will DELETE all backup archives in ${BACKUP_DIR}. Continue?"; then
+    echo
+    msg_info "حذف بکاپ / Delete Backup"
+    msg_dim "Directory: $BACKUP_DIR"
+    echo
+
+    local files=()
+    local f
+    # Newest first; cover full server + PasarGuard (+ encrypted variants)
+    while IFS= read -r f; do
+        [[ -n "$f" && -f "$f" ]] && files+=("$f")
+    done < <(ls -1t \
+        "${BACKUP_DIR}"/server-backup-*.tar.zst \
+        "${BACKUP_DIR}"/server-backup-*.tar.zst.gpg \
+        "${BACKUP_DIR}"/server-backup-*.tar.zst.enc \
+        "${BACKUP_DIR}"/pasarguard-panel-*.tar.zst \
+        "${BACKUP_DIR}"/pasarguard-panel-*.tar.zst.gpg \
+        "${BACKUP_DIR}"/pasarguard-panel-*.tar.zst.enc \
+        2>/dev/null | awk 'NF')
+
+    if [[ ${#files[@]} -eq 0 ]]; then
+        msg_warn "No backups found to delete."
         return 1
     fi
-    local count=0
-    local f
-    for f in "${BACKUP_DIR}"/server-backup-*.tar.zst \
-             "${BACKUP_DIR}"/server-backup-*.sha256 \
-             "${BACKUP_DIR}"/server-backup-*.manifest; do
-        [[ -e "$f" ]] || continue
-        rm -f "$f"
-        ((count++)) || true
+
+    local i bytes size when kind
+    echo -e "  ${C_BOLD}#   Type              Size        Date/Time            File${C_RESET}"
+    echo -e "  ${C_DIM}──────────────────────────────────────────────────────────────────────${C_RESET}"
+    for i in "${!files[@]}"; do
+        f="${files[$i]}"
+        bytes="$(stat -c%s "$f" 2>/dev/null || echo 0)"
+        size="$(human_size "$bytes")"
+        when="$(backup_datetime_label "$f")"
+        if [[ "$(basename "$f")" == pasarguard-panel-* ]]; then
+            kind="PasarGuard"
+        else
+            kind="Full server"
+        fi
+        printf "  ${C_WHITE}%2d)${C_RESET} %-16s %-11s ${C_GREEN}%-19s${C_RESET} %s\n" \
+            "$((i + 1))" "$kind" "$size" "$when" "$(basename "$f")"
     done
-    # Optional: session dirs
-    rm -rf "${BACKUP_DIR}"/session-* 2>/dev/null || true
-    msg_ok "Cleaned up $count backup-related files"
-    log_ok "Cleanup completed ($count files)"
+    echo
+    echo -e "  Enter number(s) to delete (e.g. ${C_WHITE}1${C_RESET} or ${C_WHITE}1 3 5${C_RESET}),"
+    echo -e "  or type ${C_RED}all${C_RESET} to delete every listed backup.  ${C_DIM}(empty = cancel)${C_RESET}"
+    echo
+
+    local selection=""
+    if [[ -r /dev/tty ]]; then
+        read -r -p "Delete selection: " selection < /dev/tty || selection=""
+    else
+        read -r -p "Delete selection: " selection || selection=""
+    fi
+    selection="$(echo "$selection" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    if [[ -z "$selection" ]]; then
+        msg_warn "Cancelled — nothing deleted."
+        return 1
+    fi
+
+    local to_delete=()
+    local token n
+    local sel_lc
+    sel_lc="$(echo "$selection" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$sel_lc" == "all" ]]; then
+        to_delete=("${files[@]}")
+    else
+        # Accept commas or spaces
+        selection="${selection//,/ }"
+        for token in $selection; do
+            if [[ ! "$token" =~ ^[0-9]+$ ]]; then
+                msg_warn "Invalid entry: '$token' (use numbers or 'all')"
+                return 1
+            fi
+            n=$((token))
+            if (( n < 1 || n > ${#files[@]} )); then
+                msg_warn "Out of range: $n (valid 1-${#files[@]})"
+                return 1
+            fi
+            to_delete+=("${files[$((n - 1))]}")
+        done
+    fi
+
+    if [[ ${#to_delete[@]} -eq 0 ]]; then
+        msg_warn "Nothing selected."
+        return 1
+    fi
+
+    echo
+    msg_warn "Will permanently delete ${#to_delete[@]} backup(s):"
+    for f in "${to_delete[@]}"; do
+        echo -e "  ${C_RED}•${C_RESET} $(basename "$f")  ${C_DIM}| $(backup_datetime_label "$f")${C_RESET}"
+    done
+
+    if ! confirm_action "Delete the selected backup file(s) and sidecars (.sha256/.manifest/.parts)?"; then
+        return 1
+    fi
+
+    local count=0
+    for f in "${to_delete[@]}"; do
+        msg_dim "Removing: $(basename "$f")"
+        remove_backup_artifact "$f"
+        ((count++)) || true
+        log_info "Deleted backup: $f"
+    done
+
+    msg_ok "Deleted $count backup(s)"
+    log_ok "Interactive delete completed ($count archives)"
+    return 0
+}
+
+#-------------------------------------------------------------------------------
+# Cleanup backup files (interactive — same as Delete Backup)
+#-------------------------------------------------------------------------------
+cleanup_backups() {
+    delete_backups
 }

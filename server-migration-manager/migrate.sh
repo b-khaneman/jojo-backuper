@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 #
-#   JOJO BACKUPER v1.3.2
+#   JOJO BACKUPER v1.3.3
 #   by @B_KHANEMAN
 #   Server Migration Manager — Enterprise VPS Cloning & Migration
 #
@@ -76,7 +76,7 @@ Connection & transfer:
   connect | upload
 
 Tools:
-  verify | info | preflight | postcheck
+  verify | info | delete | preflight | postcheck
 
 Advanced:
   estimate | wizard | cleanup | report | schedule | notify-test
@@ -100,6 +100,7 @@ run_command() {
         restore)     sudo_restore_on_new_server ;;
         verify)      verify_backup "${2:-}" ;;
         info)        show_backup_info ;;
+        delete|delete-backup|rm-backup) delete_backups ;;
         cleanup)     cleanup_backups ;;
         preflight)   preflight_check ;;
         estimate)    estimate_backup_size ;;
@@ -175,15 +176,15 @@ main_menu() {
         print_menu
         # Always read from the controlling terminal
         if [[ -r /dev/tty ]]; then
-            read -r -p "Select option [1-13]: " choice < /dev/tty || choice=""
+            read -r -p "Select option [1-14]: " choice < /dev/tty || choice=""
         else
-            read -r -p "Select option [1-13]: " choice || choice=""
+            read -r -p "Select option [1-14]: " choice || choice=""
         fi
         # Trim whitespace / CR
         choice="$(echo "$choice" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         echo
         if [[ -z "$choice" ]]; then
-            msg_warn "No input received — type a number (1-13) and press Enter"
+            msg_warn "No input received — type a number (1-14) and press Enter"
             sleep 1
             continue
         fi
@@ -196,20 +197,21 @@ main_menu() {
             6)  upload_backup; pause_enter ;;
             7)  verify_backup; pause_enter ;;
             8)  show_backup_info; pause_enter ;;
-            9)  preflight_check; pause_enter ;;
-            10)
+            9)  delete_backups; pause_enter ;;
+            10) preflight_check; pause_enter ;;
+            11)
                 if [[ -n "${REMOTE_HOST:-}" ]]; then postcheck_remote; else postcheck_local; fi
                 pause_enter
                 ;;
-            11) update_from_github ;;
-            12)
+            12) update_from_github ;;
+            13)
                 echo
                 msg_ok "Goodbye."
                 exit 0
                 ;;
-            13) advanced_menu ;;
+            14) advanced_menu ;;
             *)
-                msg_warn "Invalid option: '$choice' — enter 1 to 13"
+                msg_warn "Invalid option: '$choice' — enter 1 to 14"
                 sleep 1
                 ;;
         esac

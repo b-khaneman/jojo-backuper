@@ -503,13 +503,16 @@ EOF
     fi
 
     create_checksum "$archive" >/dev/null 2>&1 || sha256sum "$archive" > "${archive}.sha256"
-    local size
+    local size when
     size="$(human_size "$(stat -c%s "$archive")" 2>/dev/null || du -h "$archive" | awk '{print $1}')"
+    when="$(format_backup_datetime "$ts")"
     msg_ok "PasarGuard panel backup ready: $(basename "$archive") ($size)"
+    echo -e "  ${C_GREEN}${C_BOLD}Backup saved: $(basename "$archive") | ${when}${C_RESET}"
+    msg_info "Date/Time: $when"
     mkdir -p "${PROJECT_LOG_DIR:-$BACKUP_DIR}"
     echo "$archive" > "${PROJECT_LOG_DIR:-$BACKUP_DIR}/.last_pasarguard_backup"
     PASARGUARD_LAST_ARCHIVE="$archive"
-    log_ok "Panel archive $archive"
+    log_ok "Panel archive $archive at $when"
     return 0
 }
 
