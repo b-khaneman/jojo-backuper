@@ -781,7 +781,7 @@ restore_from_archive() {
 
     # Preserve CRITICAL target-host identity before any overwrite
     local preserve="/tmp/smm-preserve-$$"
-    mkdir -p "$preserve/netplan" "$preserve/ssh" "$preserve/cloud"
+    mkdir -p "$preserve/netplan" "$preserve/ssh" "$preserve/cloud" "$preserve/apt"
     cp -a /etc/fstab "$preserve/fstab" 2>/dev/null || true
     cp -a /etc/netplan/. "$preserve/netplan/" 2>/dev/null || true
     cp -a /etc/hostname "$preserve/hostname" 2>/dev/null || true
@@ -789,9 +789,11 @@ restore_from_archive() {
     cp -a /etc/resolv.conf "$preserve/resolv.conf" 2>/dev/null || true
     [[ -d /etc/ssh ]] && cp -a /etc/ssh/ssh_host_* "$preserve/ssh/" 2>/dev/null || true
     [[ -d /etc/cloud ]] && cp -a /etc/cloud/. "$preserve/cloud/" 2>/dev/null || true
+    # Keep NEW server apt.conf.d — old virt hooks need /usr binaries we do not restore
+    [[ -d /etc/apt ]] && cp -a /etc/apt/. "$preserve/apt/" 2>/dev/null || true
     cp -a /etc/machine-id "$preserve/machine-id" 2>/dev/null || true
     blkid > "$preserve/blkid.txt" 2>/dev/null || true
-    msg_ok "Preserved target fstab/netplan/SSH host keys (anti-brick)"
+    msg_ok "Preserved target fstab/netplan/SSH/apt.conf.d (anti-brick)"
 
     local nice_n="${RESTORE_NICE:-19}"
     local ionice_c="${RESTORE_IONICE_CLASS:-3}"
@@ -842,6 +844,7 @@ restore_from_archive() {
                     --exclude='fstab' \
                     --exclude='netplan/**' \
                     --exclude='cloud/**' \
+                    --exclude='apt/apt.conf.d/**' \
                     --exclude='machine-id' \
                     --exclude='resolv.conf' \
                     --exclude='hostname' \
@@ -899,6 +902,15 @@ restore_from_archive() {
         cp -a "$preserve/ssh/." /etc/ssh/ 2>/dev/null || true
     fi
     [[ -f "$preserve/machine-id" ]] && cp -a "$preserve/machine-id" /etc/machine-id 2>/dev/null || true
+
+    # Re-apply NEW server apt.conf.d (cloud virt hooks must match local /usr; RESTORE_USR=no)
+    if [[ -d "$preserve/apt/apt.conf.d" ]]; then
+        mkdir -p /etc/apt/apt.conf.d
+        find /etc/apt/apt.conf.d -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+        cp -a "$preserve/apt/apt.conf.d/." /etc/apt/apt.conf.d/ 2>/dev/null || true
+        msg_ok "Re-applied target /etc/apt/apt.conf.d"
+    fi
+    declare -f repair_apt_after_restore &>/dev/null && repair_apt_after_restore
 
     # Final SSH safety net — must stay reachable (reload, do NOT restart — keeps current session)
     mkdir -p /etc/ssh/sshd_config.d

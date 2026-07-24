@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 #
-#   JOJO BACKUPER v1.3.5
+#   JOJO BACKUPER v1.3.8
 #   by @B_KHANEMAN
 #   Server Migration Manager — Enterprise VPS Cloning & Migration
 #

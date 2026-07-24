@@ -77,3 +77,62 @@ restore_packages() {
     msg_ok "Package restore phase completed"
     log_ok "Package restore completed"
 }
+
+# After /etc restore without /usr, old cloud virt apt hooks (e.g. apt_hook_ubuntu_virt)
+# break apt-get. Drop conf lines that reference missing /usr binaries.
+repair_apt_after_restore() {
+    local confdir="/etc/apt/apt.conf.d"
+    [[ -d "$confdir" ]] || return 0
+
+    local f repaired=0
+    shopt -s nullglob
+    for f in "$confdir"/*; do
+        [[ -f "$f" && -r "$f" ]] || continue
+
+        local refs missing=0
+        refs="$(grep -oE '/usr/[^"'\''[:space:];{}]+' "$f" 2>/dev/null || true)"
+        [[ -z "$refs" ]] && continue
+
+        while IFS= read -r ref; do
+            [[ -z "$ref" ]] && continue
+            if [[ ! -e "$ref" ]]; then
+                missing=1
+                break
+            fi
+        done <<< "$refs"
+        [[ $missing -eq 0 ]] && continue
+
+        local tmp
+        tmp="$(mktemp)" || continue
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            local skip=0
+            while IFS= read -r ref; do
+                [[ -z "$ref" ]] && continue
+                if [[ ! -e "$ref" ]]; then
+                    skip=1
+                    msg_warn "  Dropping apt hook ($(basename "$f")): missing $ref"
+                    break
+                fi
+            done < <(echo "$line" | grep -oE '/usr/[^"'\''[:space:];{}]+' 2>/dev/null || true)
+            if [[ $skip -eq 1 ]]; then
+                repaired=1
+                continue
+            fi
+            printf '%s\n' "$line" >> "$tmp"
+        done < "$f"
+
+        if [[ ! -s "$tmp" ]]; then
+            rm -f "$f"
+        else
+            cat "$tmp" > "$f"
+        fi
+        rm -f "$tmp"
+    done
+    shopt -u nullglob
+
+    if [[ $repaired -eq 1 ]]; then
+        msg_ok "Repaired apt.conf.d (removed hooks to missing binaries)"
+        log_ok "repair_apt_after_restore cleaned broken hooks"
+    fi
+    return 0
+}

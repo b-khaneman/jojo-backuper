@@ -8,6 +8,9 @@
 # Does NOT run docker compose up (CPU-safe). Call after restore when panel/compose present.
 ensure_docker_installed() {
     export TERM="${TERM:-xterm-256color}"
+    # Full /etc restore can leave apt hooks pointing at missing /usr binaries
+    declare -f repair_apt_after_restore &>/dev/null && repair_apt_after_restore
+
     if check_command docker; then
         systemctl enable docker 2>/dev/null || true
         if ! docker info &>/dev/null; then
