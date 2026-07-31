@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 #
-#   RESTORE AGENT — JOJO BACKUPER v1.4.2
+#   RESTORE AGENT — JOJO BACKUPER v1.0
 #   by @B_KHANEMAN
 #
 #   Runs on the NEW server.
