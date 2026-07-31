@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 # MODULE: Self-update from GitHub
-# JOJO BACKUPER v1.2.0 | @B_KHANEMAN
+# JOJO BACKUPER v1.4.2 | @B_KHANEMAN
 #===============================================================================
 
 JOJO_GITHUB_REPO="${JOJO_GITHUB_REPO:-https://github.com/b-khaneman/jojo-backuper.git}"

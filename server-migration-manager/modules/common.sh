@@ -721,5 +721,6 @@ merge_safe_config_keys() {
     _set_cfg_key RESTORE_DOCKER_IMAGES no "$tmp"
     _set_cfg_key RESTORE_MAIL no "$tmp"
     _set_cfg_key SAFE_RESTORE_GUARDS yes "$tmp"
+    _set_cfg_key AUTO_HEAL_AFTER_RESTORE yes "$tmp"
     mv -f "$tmp" "$cfg"
 }

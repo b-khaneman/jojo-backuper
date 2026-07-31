@@ -1,7 +1,7 @@
 <div align="center">
 
 # **JOJO BACKUPER**
-### **Server Migration Manager · v1.1**
+### **Server Migration Manager · v1.4.2**
 
 **Enterprise Ubuntu VPS Cloning & Migration Toolkit**
 
@@ -10,7 +10,7 @@
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%20%7C%2022.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![License](https://img.shields.io/badge/License-MIT-0B3D91?style=for-the-badge)](./LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.2.0-111111?style=for-the-badge)](./server-migration-manager/VERSION)
+[![Version](https://img.shields.io/badge/Version-1.4.2-111111?style=for-the-badge)](./server-migration-manager/VERSION)
 
 <br/>
 
@@ -78,7 +78,7 @@
 | | |
 |:--|:--|
 | **نام پروژه** | **JOJO BACKUPER** |
-| **موتور** | Server Migration Manager **v1.1** |
+| **موتور** | Server Migration Manager **v1.4.2** |
 | **پلتفرم** | **Ubuntu 20.04 / 22.04 / 24.04** |
 | **سازنده** | **[@B_KHANEMAN](https://github.com/b-khaneman)** |
 
@@ -94,10 +94,11 @@
 | **Compression** | `tar` + **zstd** + progress (`pv`) |
 | **Quick Deploy** | گرفتن مشخصات سرور جدید + آپلود + نصب خودکار |
 | **Sudo Restore** | ریستور امن با دسترسی کامل root |
+| **PasarGuard** | مهاجرت پنل + گواهی + نودها + دیتابیس |
+| **Auto-heal** | APT / Docker / PasarGuard بعد از ریستور · `sudo jojo heal` |
 | **Databases** | MySQL / MariaDB / PostgreSQL / Redis / MongoDB |
-| **Docker** | Images · Volumes · Networks · Compose |
-| **Security** | SSH keys · fail2ban · AppArmor · sudoers |
-| **Network** | Netplan · iptables · nftables · WireGuard |
+| **Docker** | Volumes preserved · containers/runtime excluded |
+| **Safe guards** | no auto-reboot · no `/boot` `/usr` overwrite by default |
 | **Integrity** | **SHA256** checksum قبل از ریستور |
 | **Notify** | Telegram / Webhook (اختیاری) |
 
@@ -159,11 +160,17 @@ cd jojo-backuper/server-migration-manager
 sudo bash install.sh --run
 ```
 
-**آپدیت از داخل منو:** گزینه **`16) Update from GitHub`**  
+**آپدیت از داخل منو:** گزینه **`13) Update from GitHub`**  
 یا:
 
 ```bash
 sudo jojo update
+```
+
+**Auto-heal (همین سرور):** گزینه **`12)`** یا:
+
+```bash
+sudo jojo heal
 ```
 
 </details>
@@ -182,10 +189,11 @@ sudo jojo update
 
 | مرحله | کار | گزینه منو |
 |:----:|:----|:----------|
-| **۱** | ساخت بکاپ کامل از سرور قدیم | **`3` Create Full Server Backup** |
-| **۲** | ارسال بکاپ + نصب ابزار روی سرور جدید | **`1` Deploy to New Server** |
-| **۳** | ریستور با sudo روی سرور جدید | **`2` Restore Backup (sudo)** |
-| **۴** | بررسی سلامت بعد از مهاجرت | **`12` Post-Migration Health Check** |
+| **۱** | ساخت بکاپ کامل از سرور قدیم | **`4` Create full backup** |
+| **۲** | ارسال بکاپ + نصب ابزار روی سرور جدید | **`1` Deploy to new server** |
+| **۳** | ریستور با sudo روی سرور جدید | **`2` Restore backup** |
+| **۴** | بررسی سلامت بعد از مهاجرت | **`11` Health check** |
+| **۵** | (در صورت نیاز) ترمیم APT/Docker/Panel | **`12` Auto-heal this server** |
 
 ```text
   [ OLD ] --backup--> [ ARCHIVE.tar.zst ]
@@ -203,31 +211,38 @@ sudo jojo update
 ## **منوی برنامه**
 
 ```text
-════════════════════════════════════════
-   JOJO BACKUPER  ·  SMM v1.1
-   by @B_KHANEMAN
-════════════════════════════════════════
+=========================================
+  JOJO BACKUPER  ·  SMM v1.4.2
+  by @B_KHANEMAN
+=========================================
 
-─── Quick Migration ───
- 1) Deploy to New Server
- 2) Restore Backup (sudo)
+── Quick ──
+ 1) Deploy to new server
+ 2) Restore backup
+ 3) Migrate PasarGuard panel
+ 4) Create full backup
 
-─── Backup & Tools ───
- 3) Create Full Server Backup
- 4) Connect To New Server
- 5) Upload Backup Only
- 6) Verify Backup
- 7) Show Backup Information
- 8) Cleanup Backup Files
- 9) Pre-flight Check
-10) Estimate Backup Size
-11) Full Migration Wizard
-12) Post-Migration Health Check
-13) Generate Migration Report
-14) Schedule Weekly Backup
-15) Test Notifications
-16) Exit
+── Transfer ──
+ 5) Connect to new server
+ 6) Upload backup
+
+── Backups ──
+ 7) Verify backup
+ 8) Show backups
+ 9) Delete backup
+
+── Checks ──
+10) Pre-flight check
+11) Health check
+
+── System ──
+12) Auto-heal this server  (fix APT/Docker/PasarGuard)
+13) Update from GitHub
+14) Exit
+15) Advanced
 ```
+
+Advanced (15): estimate · wizard · report · schedule · notify-test
 
 ---
 
@@ -236,13 +251,16 @@ sudo jojo update
 ## **دستورات CLI**
 
 ```bash
-sudo ./migrate.sh backup          # بکاپ کامل
-sudo ./migrate.sh deploy          # مشخصات + آپلود + نصب
-sudo ./migrate.sh sudo-restore    # ریستور با sudo
-sudo ./migrate.sh preflight       # چک قبل از کار
-sudo ./migrate.sh estimate        # تخمین حجم
-sudo ./migrate.sh wizard          # ویزارد کامل
-sudo ./migrate.sh postcheck       # بررسی بعد از مهاجرت
+sudo ./migrate.sh backup          # full backup
+sudo ./migrate.sh deploy          # connect + upload + install
+sudo ./migrate.sh sudo-restore    # restore with sudo
+sudo ./migrate.sh pasarguard      # PasarGuard panel migrate
+sudo ./migrate.sh heal            # auto-heal APT/Docker/PasarGuard
+sudo ./migrate.sh preflight       # pre-flight check
+sudo ./migrate.sh postcheck       # health check
+sudo ./migrate.sh update          # update from GitHub
+sudo ./migrate.sh estimate        # estimate size
+sudo ./migrate.sh wizard          # full wizard
 ```
 
 ---
@@ -261,7 +279,10 @@ sudo ./migrate.sh postcheck       # بررسی بعد از مهاجرت
 | **`BANDWIDTH_LIMIT_KB`** | محدودیت سرعت آپلود | `8192` |
 | **`ENCRYPT_BACKUP`** | رمزنگاری بکاپ | `yes` / `no` |
 | **`NOTIFY_ENABLED`** | نوتیفیکیشن | `yes` / `no` |
-| **`REBOOT_AFTER_RESTORE`** | ریبوت بعد از ریستور | `yes` |
+| **`REBOOT_AFTER_RESTORE`** | ریبوت بعد از ریستور | `no` (safe default) |
+| **`RESTORE_BOOT`** | بازنویسی `/boot` | `no` |
+| **`RESTORE_USR`** | بازنویسی کامل `/usr` | `no` |
+| **`AUTO_HEAL_AFTER_RESTORE`** | ترمیم خودکار بعد از ریستور | `yes` |
 
 ---
 
@@ -275,8 +296,10 @@ sudo ./migrate.sh postcheck       # بررسی بعد از مهاجرت
 sudo /opt/jojo-backup/restore-agent.sh \
   --archive /backup/server-backup-TIMESTAMP.tar.zst \
   --yes \
-  --reboot=yes
+  --reboot=no
 ```
+
+> Default is **no reboot**. Reboot manually only after SSH access is confirmed.
 
 ---
 
@@ -301,7 +324,8 @@ sudo /opt/jojo-backup/restore-agent.sh \
 | **Permission denied** | همه دستورات را با **`sudo`** اجرا کنید |
 | **SSH fail** | پورت، فایروال، کلید/پسورد را چک کنید |
 | **آپلود قطع شد** | دوباره گزینه **`1` Deploy** — rsync ادامه می‌دهد |
-| **کمبود فضا** | گزینه **`10` Estimate** + پاکسازی دیسک |
+| **کمبود فضا** | گزینه **`15` Advanced → 1 Estimate** + پاکسازی دیسک |
+| **APT/Docker خراب بعد از ریستور** | **`12` Auto-heal** یا `sudo jojo heal` |
 | **ریستور fail** | لاگ: `/var/log/server-migration/restore.log` |
 
 ---
@@ -359,7 +383,7 @@ jojo-backuper/
 
 ### **Version**
 
-**JOJO BACKUPER v1.2.0** · by **[@B_KHANEMAN](https://github.com/b-khaneman)**
+**JOJO BACKUPER v1.4.2** · by **[@B_KHANEMAN](https://github.com/b-khaneman)**
 
 **© 2026 JOJO BACKUPER · MIT License · @B_KHANEMAN**
 

@@ -67,7 +67,7 @@ APP_DIR="${INSTALL_DIR}/server-migration-manager"
 [[ -f "${APP_DIR}/migrate.sh" ]] || { echo "[ERROR] migrate.sh missing"; exit 1; }
 
 chmod +x "$APP_DIR"/*.sh 2>/dev/null || true
-find "$APP_DIR/modules" -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true
+find "$APP_DIR/modules" "$APP_DIR/scripts" -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true
 
 echo "[+] Running installer..."
 bash "${APP_DIR}/install.sh" || { echo "[ERROR] install failed"; exit 1; }

@@ -64,11 +64,11 @@ if command -v readlink >/dev/null 2>&1; then
 fi
 
 chmod +x "${SCRIPT_DIR}/migrate.sh" "${SCRIPT_DIR}/restore-agent.sh" "${SCRIPT_DIR}/install.sh" 2>/dev/null || true
-find "${SCRIPT_DIR}/modules" -type f -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true
+find "${SCRIPT_DIR}/modules" "${SCRIPT_DIR}/scripts" -type f -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true
 
 if command -v sed >/dev/null 2>&1; then
     sed -i 's/\r$//' "${SCRIPT_DIR}/migrate.sh" "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/restore-agent.sh" 2>/dev/null || true
-    find "${SCRIPT_DIR}/modules" -type f -name '*.sh' -exec sed -i 's/\r$//' {} \; 2>/dev/null || true
+    find "${SCRIPT_DIR}/modules" "${SCRIPT_DIR}/scripts" -type f -name '*.sh' -exec sed -i 's/\r$//' {} \; 2>/dev/null || true
 fi
 
 mkdir -p /var/log/server-migration

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #===============================================================================
 #
-#   RESTORE AGENT — SERVER MIGRATION MANAGER v1.1
-#   JOJO BACKUP
+#   RESTORE AGENT — JOJO BACKUPER v1.4.2
+#   by @B_KHANEMAN
 #
 #   Runs on the NEW server.
 #   Usage:
